@@ -7,6 +7,8 @@ import GenerateReport from "@/pages/GenerateReport";
 import ReportView from "@/pages/ReportView";
 import History from "@/pages/History";
 import Settings from "@/pages/Settings";
+import ComparePage from "@/pages/ComparePage";
+import CumulativeView from "@/pages/CumulativeView";
 
 function App() {
   return (
@@ -18,6 +20,8 @@ function App() {
             <Route path="/generate" element={<GenerateReport />} />
             <Route path="/report/:id" element={<ReportView />} />
             <Route path="/history" element={<History />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/cumulative" element={<CumulativeView />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Layout>

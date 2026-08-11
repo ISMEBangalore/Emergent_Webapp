@@ -5,7 +5,7 @@ import { KpiCards } from "@/components/KpiCards";
 import { fmtInt, fmtMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ArrowRight, Sparkle, UploadSimple, TrendUp } from "@phosphor-icons/react";
+import { ArrowRight, Sparkle, UploadSimple, TrendUp, ChartLineUp, ArrowsDownUp } from "@phosphor-icons/react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
 } from "recharts";
@@ -86,10 +86,18 @@ export default function Dashboard() {
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400 mb-1">Latest report</p>
           <h2 className="font-display text-xl font-bold text-slate-900">{latest.week_label}</h2>
         </div>
-        <Button data-testid="view-latest-btn" onClick={() => nav(`/report/${latest.id}`)}
-                className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2">
-          Open full report <ArrowRight size={16} weight="bold" />
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button data-testid="dash-compare-btn" variant="outline" onClick={() => nav("/compare")} className="gap-2">
+            <ArrowsDownUp size={16} weight="bold" /> Compare weeks
+          </Button>
+          <Button data-testid="dash-tilldate-btn" variant="outline" onClick={() => nav("/cumulative")} className="gap-2">
+            <ChartLineUp size={16} weight="bold" /> Report till date
+          </Button>
+          <Button data-testid="view-latest-btn" onClick={() => nav(`/report/${latest.id}`)}
+                  className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2">
+            Open full report <ArrowRight size={16} weight="bold" />
+          </Button>
+        </div>
       </div>
 
       <KpiCards kpis={latest.kpis} />

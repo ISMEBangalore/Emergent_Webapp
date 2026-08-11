@@ -14,7 +14,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
-from report_engine import DEFAULT_SETTINGS, compute_report
+from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports
 from apps_parser import parse_application_files
 from excel_export import build_workbook
 
@@ -194,6 +194,40 @@ async def list_reports():
         {}, {"_id": 0, "result": 0, "settings": 0}
     ).sort("created_at", -1)
     return await cursor.to_list(500)
+
+
+async def _build_cumulative():
+    settings = await get_settings()
+    reports = await db.reports.find({"status": "ready"}, {"_id": 0}).to_list(1000)
+    result = await asyncio.to_thread(aggregate_reports, reports, settings)
+    weeks = result.get("data_quality", {}).get("weeks_aggregated", 0)
+    doc = {
+        "id": "cumulative",
+        "week_label": f"Report Till Date ({weeks} week{'s' if weeks != 1 else ''})",
+        "week_date": now_iso()[:10],
+        "status": "ready",
+        "source": "cumulative",
+        "lead_filename": f"{weeks} reports aggregated",
+        "result": result,
+        "kpis": _kpis(result),
+    }
+    return doc
+
+
+@api_router.get("/reports/cumulative")
+async def cumulative_report():
+    return await _build_cumulative()
+
+
+@api_router.get("/reports/cumulative/export")
+async def export_cumulative():
+    doc = await _build_cumulative()
+    data = await asyncio.to_thread(build_workbook, doc)
+    return StreamingResponse(
+        iter([data]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="report_till_date.xlsx"'},
+    )
 
 
 @api_router.get("/reports/{report_id}")

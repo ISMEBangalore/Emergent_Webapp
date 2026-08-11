@@ -196,8 +196,32 @@ def compute_report(
     matrix_counts = {row: {p: int(ct.loc[row, p]) if (row in ct.index and p in ct.columns) else 0 for p in all_cols}
                      for row in stage_rows}
 
-    def totrow(d: Dict[str, int]) -> int:
-        return sum(d[p] for p in programs)
+    return build_result(
+        programs=programs, stage_rows=stage_rows, matrix_counts=matrix_counts,
+        total_leads=total_leads, verified_leads=verified_leads,
+        redirect_leads=redirect_leads, redirect_verified=redirect_verified,
+        api_leads=api_leads, api_verified=api_verified, relevant_leads=relevant_leads,
+        application_counts=application_counts, amount_spent=amount_spent,
+        additional_attributed=additional_attributed,
+        detected_columns={
+            "program": col_prog, "stage": col_stage,
+            "email_verification": col_email, "mobile_verification": col_mobile,
+            "lead_origin": col_origin, "agent_code": col_agent,
+        },
+        data_quality={
+            "total_rows": n, "unclassified_program": unclassified,
+            "program_column_present": bool(col_prog), "stage_column_present": bool(col_stage),
+        },
+    )
+
+
+def build_result(programs, stage_rows, matrix_counts, total_leads, verified_leads,
+                 redirect_leads, redirect_verified, api_leads, api_verified, relevant_leads,
+                 application_counts, amount_spent, additional_attributed,
+                 detected_columns, data_quality):
+    """Build the report result dict from pre-aggregated count dictionaries."""
+    def totrow(d):
+        return sum(d.get(p, 0) for p in programs)
 
     apps_with = {p: int(application_counts.get(p, {}).get("with_code", 0)) for p in programs}
     apps_without = {p: int(application_counts.get(p, {}).get("without_code", 0)) for p in programs}
@@ -212,17 +236,8 @@ def compute_report(
     result: Dict[str, Any] = {
         "programs": programs,
         "columns": programs + ["Total"],
-        "detected_columns": {
-            "program": col_prog, "stage": col_stage,
-            "email_verification": col_email, "mobile_verification": col_mobile,
-            "lead_origin": col_origin, "agent_code": col_agent,
-        },
-        "data_quality": {
-            "total_rows": n,
-            "unclassified_program": unclassified,
-            "program_column_present": bool(col_prog),
-            "stage_column_present": bool(col_stage),
-        },
+        "detected_columns": detected_columns,
+        "data_quality": data_quality,
         "matrix": [],
         "summary": [],
     }
@@ -287,4 +302,81 @@ def compute_report(
     mod_cost = {p: round(spent[p] / (total_apps[p] + add_attr[p]), 2) if (total_apps[p] + add_attr[p]) else 0 for p in programs}
     S.append(srow("Modified CPA after attribution", mod_cost, fmt="money"))
 
+    return result
+
+
+
+def _sum_row(target, values):
+    for p, v in (values or {}).items():
+        target[p] = target.get(p, 0) + (v or 0)
+
+
+def aggregate_reports(reports, settings):
+    """Sum aggregated counts across multiple stored report results into one result."""
+    cfg = {**DEFAULT_SETTINGS, **(settings or {})}
+    programs = cfg["programs"]
+    stage_rows = cfg["stage_rows"]
+
+    matrix_counts = {row: {p: 0 for p in programs} for row in stage_rows}
+    total_leads = {p: 0 for p in programs}
+    verified_leads = {p: 0 for p in programs}
+    redirect_leads = {p: 0 for p in programs}
+    redirect_verified = {p: 0 for p in programs}
+    api_leads = {p: 0 for p in programs}
+    api_verified = {p: 0 for p in programs}
+    relevant_leads = {p: 0 for p in programs}
+    app_counts = {p: {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0} for p in programs}
+    amount_spent = {p: 0 for p in programs}
+    additional_attributed = {p: 0 for p in programs}
+
+    label_map = {
+        "Verified Leads": verified_leads,
+        "Total Redirect Leads": redirect_leads,
+        "Total Verified redirect leads": redirect_verified,
+        "Total API Leads": api_leads,
+        "Total Verified API leads": api_verified,
+        "Relevant Leads": relevant_leads,
+        "Amount Spent": amount_spent,
+        "Additional Attributed Applications": additional_attributed,
+    }
+    app_map = {
+        "No. of Applications with codes": "with_code",
+        "No. of Applications without codes": "without_code",
+        "No of applications through redirect leads": "via_redirect",
+        "No of applications through API leads": "via_api",
+    }
+
+    weeks = 0
+    for rep in reports:
+        res = rep.get("result")
+        if not res:
+            continue
+        weeks += 1
+        for m in res.get("matrix", []):
+            row = m["stage"]
+            if row in matrix_counts:
+                for p in programs:
+                    matrix_counts[row][p] += m["values"].get(p, 0) or 0
+        for s in res.get("summary", []):
+            label = s.get("label")
+            if label in label_map:
+                _sum_row(label_map[label], s.get("values"))
+            if label in app_map:
+                key = app_map[label]
+                for p in programs:
+                    app_counts[p][key] += s.get("values", {}).get(p, 0) or 0
+        # total leads per program = sum of matrix values (recomputed at the end)
+
+    for p in programs:
+        total_leads[p] = sum(matrix_counts[row][p] for row in stage_rows)
+
+    result = build_result(
+        programs=programs, stage_rows=stage_rows, matrix_counts=matrix_counts,
+        total_leads=total_leads, verified_leads=verified_leads,
+        redirect_leads=redirect_leads, redirect_verified=redirect_verified,
+        api_leads=api_leads, api_verified=api_verified, relevant_leads=relevant_leads,
+        application_counts=app_counts, amount_spent=amount_spent,
+        additional_attributed=additional_attributed,
+        detected_columns={}, data_quality={"weeks_aggregated": weeks},
+    )
     return result

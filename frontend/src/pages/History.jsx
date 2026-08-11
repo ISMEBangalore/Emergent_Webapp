@@ -41,8 +41,20 @@ export default function History() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-900">History</h1>
-      <p className="text-slate-500 mt-1 mb-6">All generated weekly reports and week-over-week trends.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-900">History</h1>
+          <p className="text-slate-500 mt-1 mb-6">All generated weekly reports and week-over-week trends.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button data-testid="hist-compare-btn" variant="outline" onClick={() => nav("/compare")} className="gap-2">
+            <ArrowsDownUp size={16} weight="bold" /> Compare weeks
+          </Button>
+          <Button data-testid="hist-tilldate-btn" variant="outline" onClick={() => nav("/cumulative")} className="gap-2">
+            <ChartLineUp size={16} weight="bold" /> Report till date
+          </Button>
+        </div>
+      </div>
 
       {trendData.length >= 2 && (
         <div className="bg-white border border-slate-200 rounded-md p-5 mb-6">

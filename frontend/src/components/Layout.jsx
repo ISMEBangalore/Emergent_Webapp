@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { ChartBar, UploadSimple, ClockCounterClockwise, GearSix, GraduationCap, List, X } from "@phosphor-icons/react";
+import { ChartBar, UploadSimple, ClockCounterClockwise, GearSix, GraduationCap, List, X, ArrowsDownUp, ChartLineUp } from "@phosphor-icons/react";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: ChartBar, testid: "nav-dashboard" },
   { to: "/generate", label: "Generate Report", icon: UploadSimple, testid: "nav-generate" },
+  { to: "/compare", label: "Week Compare", icon: ArrowsDownUp, testid: "nav-compare" },
+  { to: "/cumulative", label: "Report Till Date", icon: ChartLineUp, testid: "nav-cumulative" },
   { to: "/history", label: "History", icon: ClockCounterClockwise, testid: "nav-history" },
   { to: "/settings", label: "Settings", icon: GearSix, testid: "nav-settings" },
 ];
