@@ -1,0 +1,118 @@
+{
+  "project_context": {
+    "type": "Dashboard / Internal Analytics App",
+    "description": "Weekly CRM Report Dashboard for college/business school to parse Excel lead/application dumps, calculate metrics, and track week-over-week trends."
+  },
+  "theme": "Light Mode Preferred (Swiss & High-Contrast Archetype)",
+  "typography": {
+    "strategy": "Swiss Brutalist (Tech/Data) - High Legibility",
+    "headings": {
+      "font_family": "Manrope, sans-serif",
+      "weights": ["font-light", "font-black"],
+      "classes": "tracking-tight text-slate-900"
+    },
+    "body": {
+      "font_family": "IBM Plex Sans, sans-serif",
+      "weights": ["font-normal", "font-medium"],
+      "classes": "leading-relaxed text-slate-700"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-black tracking-tighter",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-bold",
+      "h4": "text-lg sm:text-xl font-semibold",
+      "body": "text-base",
+      "labels_overlines": "text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+    },
+    "forbidden_fonts": ["Inter", "Roboto", "Open Sans", "Lato", "Space Grotesk"]
+  },
+  "colors": {
+    "archetype": "Swiss & High-Contrast (Authority, Clarity, Truth)",
+    "base": {
+      "background": "#F8F9FA",
+      "surface": "#FFFFFF",
+      "surface_alt": "#F1F5F9",
+      "border": "#E2E8F0"
+    },
+    "brand_primary": "#002FA7",
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "muted": "#94A3B8"
+    },
+    "functional": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "danger": "#EF4444",
+      "info": "#3B82F6"
+    },
+    "rules": [
+      "No full-screen gradients.",
+      "Never use pure #000000 or #808080; always tint with blue/slate.",
+      "Color is Function Only. 95% of UI should be monochrome, using brand_primary only to guide action."
+    ],
+    "forbidden_colors": ["#7351B7", "#1B93A4", "teal green", "teal blue"]
+  },
+  "visual_enhancers": {
+    "surface_strategy": "Grid Borders (Technical Look) & Flat Solid surfaces. NO Glassmorphism for data apps.",
+    "borders": "1px solid borders (border-slate-200). Use border-collapse for grid/table views.",
+    "shadows": "Minimal. Use shadow-sm for interactive cards on hover, otherwise flat.",
+    "radius": "Subtle roundness. Max 4px to 8px border-radius (rounded or rounded-md). No excessive pill shapes except for status badges."
+  },
+  "grids_and_layouts": {
+    "strategy": "High Density Grid (For Dashboards / Analytics)",
+    "spacing_scale": "p-1, p-2, p-4, p-6, p-8, p-12. Containers with borders MUST have internal padding (p-6 or p-8).",
+    "bento_grid": {
+      "base": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+      "gap": "gap-4 or gap-6",
+      "summary_widgets": "col-span-1 (Single metric like Total CPA)",
+      "primary_data": "col-span-2 row-span-2 or col-span-full (The main Program x Lead-Stage Matrix)",
+      "feed_list": "col-span-1 row-span-2 (History/Week-over-week sidebar)"
+    },
+    "alignment": "Left-align dense text/labels. Right-align numerical data in tables. Center-align only empty states or specific standalone CTA blocks.",
+    "navigation": "Visible navigation bar or sidebar. Header MUST have a solid background (bg-white border-b border-slate-200)."
+  },
+  "components": {
+    "tables": "Shadcn UI Table. Heavily customized for density. Sticky header, 1px subtle borders on cells, alternate row backgrounds (bg-slate-50/50).",
+    "forms": "Shadcn UI Form, Input, Select. Never use native HTML inputs. Use for 'Amount Spent' entries and Settings/Rules panel.",
+    "buttons": "Shadcn UI Button. Sharp edges (rounded-md). Explicit hover states (hover:bg-primary/90).",
+    "uploader": "Custom Drag & Drop zone using raw HTML/Tailwind. border-2 border-dashed border-slate-300 hover:border-primary bg-slate-50 p-12 flex flex-col items-center.",
+    "toasts": "Sonner (located in /app/src/components/ui/sonner). Use for upload success, calculation errors, save confirmations.",
+    "charts": "Recharts or Shadcn Charts for Week-over-week trend visualization (Line/Bar charts). Keep colors strictly accessible and within the functional palette."
+  },
+  "motion_and_interactions": {
+    "hover": "Explicit color changes (e.g., hover:bg-slate-100 hover:text-primary). Subtle transform (-translate-y-[2px]) on cards.",
+    "focus": "High contrast ring: focus:ring-2 focus:ring-primary focus:ring-offset-2.",
+    "transitions": "Use specific properties (transition-colors, transition-transform duration-200 ease-out). NEVER use 'transition-all'.",
+    "loading": "Use skeleton loaders for tables/charts while data is processing."
+  },
+  "accessibility": {
+    "contrast": "Minimum 4.5:1 for normal text (WCAG AA). 3:1 for large text. Use APCA guidelines.",
+    "motion": "Respect prefers-reduced-motion.",
+    "testing": "ALL interactive and key informational elements MUST include a 'data-testid' attribute (e.g., data-testid='upload-lead-dump-btn', data-testid='metric-total-leads')."
+  },
+  "media_and_assets": {
+    "icons": "Phosphor Icons (@phosphor-icons/react). Run: yarn add @phosphor-icons/react. Use Duotone or Regular weights. No emojis.",
+    "images": "Not required for this data-heavy internal dashboard. Do not use placeholders. Use typography, abstract geometric SVG patterns, or Phosphor icons for empty states.",
+    "3d_libraries": "Not applicable/Overkill for internal data matrix reporting. Focus on clear 2D data visualization."
+  },
+  "instructions_to_main_agent": [
+    "Install required dependencies: 'yarn add xlsx @phosphor-icons/react recharts sonner'.",
+    "Create a robust parsing utility for Excel files using the 'xlsx' library to handle the Lead and Application dumps.",
+    "Build a Program × Lead-Stage matrix component that dynamically generates columns based on Lead-Stage rules provided in the Settings panel.",
+    "Implement a state management solution (Context or Zustand) to store historical weekly reports for week-over-week comparison.",
+    "Ensure the 'Amount Spent' inputs automatically recalculate 'Cost per Application' (CPA) and 'Relevant leads' metrics upon change.",
+    "Add an 'Export to Excel' feature that reverse-generates a clean .xlsx report matching the generated matrix table.",
+    "Do NOT use HTML-based components for advanced interactions like dropdowns or toasts; rely strictly on Shadcn and Sonner."
+  ],
+  "universal_guidelines_for_main_agent": [
+    "Do not converge toward generic, 'on distribution' outputs. Avoid the 'AI slop' aesthetic.",
+    "Create depth through layered design elements with z-index hierarchy, even in flat designs (e.g., sticky headers above tables).",
+    "You MUST NOT apply universal transitions (e.g., `transition: all`).",
+    "You MUST NOT center align the app container (do not add `.App { text-align: center; }` in CSS).",
+    "Always use modern button styles matching the dashboard archetype (sharp or 4px radius, clear interactive states).",
+    "Never use AI assistant emoji characters (🤖🧠💭💡) for icons. Use the specified Phosphor icon library.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Ensure all components from Shadcn are thoroughly customized to remove default 'Vercel-look' styles where they conflict with the Swiss High-Contrast archetype."
+  ]
+}
