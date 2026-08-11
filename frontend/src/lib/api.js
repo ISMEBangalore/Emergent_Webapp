@@ -15,6 +15,7 @@ export const api = {
   createReport: (formData) =>
     client.post("/reports", formData, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data),
   updateAmounts: (id, body) => client.patch(`/reports/${id}/amounts`, body).then((r) => r.data),
+  updatePublisherAmounts: (id, body) => client.patch(`/reports/${id}/publisher-amounts`, body).then((r) => r.data),
   trends: () => client.get("/trends").then((r) => r.data),
   getCumulative: () => client.get("/reports/cumulative").then((r) => r.data),
   cumulativeExportUrl: () => `${API}/reports/cumulative/export`,

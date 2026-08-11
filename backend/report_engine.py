@@ -150,7 +150,7 @@ def compute_report(
     setb(raw == "APPLIED", "APPLIED")
     setb((raw == "COLD") & verified, "COLD Verified leads (includes NI)")
     setb((raw == "COLD") & ~verified, "COLD Unverified leads")
-    setb(raw.isin(["NOT INTERESTED", "FORM STARTED - NOT INTERESTED"]), "COLD Verified leads (includes NI)")
+    setb(raw.isin(["NOT INTERESTED", "FORM STARTED - NOT INTERESTED"]), "COLD Unverified leads")
     setb(raw.isin(["JOINED IN OTHER COLLEGE", "JOINED IN ANOTHER COLLEGE"]), "JOINED IN ANOTHER COLLEGE")
     setb(raw == "UNANSWERED 3 TIMES", "UNANSWERED 3 TIMES")
     setb(raw.isin(["JUNK", "WRONG NUMBER", "TEST LEADS", "DONT PURGE"]), "JUNK")
@@ -208,11 +208,15 @@ def compute_report(
     work["pub"] = work["pub"].where(work["pub"].isin(top_pubs), "Other")
     pub_cats = top_pubs + (["Other"] if len(pub_vc) > len(top_pubs) else [])
     (p_total, p_ver, p_redir, p_redirv, p_api, p_apiv, p_rel, p_mc) = agg("pub", pub_cats)
+    # Use the APPLIED lead-stage count as the per-publisher application proxy
+    applied_row = p_mc.get("APPLIED", {})
+    pub_app_counts = {c: {"with_code": 0, "without_code": int(applied_row.get(c, 0)),
+                          "via_redirect": 0, "via_api": 0} for c in pub_cats}
     publisher_result = build_result(
         programs=pub_cats, stage_rows=stage_rows, matrix_counts=p_mc,
         total_leads=p_total, verified_leads=p_ver, redirect_leads=p_redir,
         redirect_verified=p_redirv, api_leads=p_api, api_verified=p_apiv,
-        relevant_leads=p_rel, application_counts={}, amount_spent={},
+        relevant_leads=p_rel, application_counts=pub_app_counts, amount_spent={},
         additional_attributed={},
         detected_columns={"publisher": col_pub},
         data_quality={"total_rows": n, "publisher_column_present": bool(col_pub),

@@ -282,6 +282,44 @@ async def update_amounts(report_id: str, payload: AmountUpdate):
     return await db.reports.find_one({"id": report_id}, {"_id": 0})
 
 
+class PublisherAmountUpdate(BaseModel):
+    amount_spent: Dict[str, float] = {}
+    cpa: Dict[str, float] = {}
+
+
+@api_router.patch("/reports/{report_id}/publisher-amounts")
+async def update_publisher_amounts(report_id: str, payload: PublisherAmountUpdate):
+    doc = await db.reports.find_one({"id": report_id}, {"_id": 0})
+    if not doc or doc.get("status") != "ready":
+        raise HTTPException(404, "Report not ready")
+    result = doc["result"]
+    pr = result.get("publisher_report")
+    if not pr:
+        raise HTTPException(400, "No publisher report available")
+    cols = pr["programs"]
+    summ = {s["label"]: s for s in pr["summary"]}
+    total_apps = {c: summ["Total No. of Applications"]["values"].get(c, 0) for c in cols}
+    spent = {}
+    for c in cols:
+        amt = float(payload.amount_spent.get(c, 0) or 0)
+        cpa = float(payload.cpa.get(c, 0) or 0)
+        spent[c] = amt if amt > 0 else round(cpa * total_apps[c], 2)
+    summ["Amount Spent"]["values"] = spent
+    summ["Amount Spent"]["total"] = round(sum(spent.values()), 2)
+    cost = {c: round(spent[c] / total_apps[c], 2) if total_apps[c] else 0 for c in cols}
+    summ["Cost/Application"]["values"] = cost
+    summ["Cost/Application"]["total"] = round(sum(spent.values()) / sum(total_apps.values()), 2) if sum(total_apps.values()) else 0
+    summ["Modified CPA after attribution"]["values"] = cost
+    summ["Modified CPA after attribution"]["total"] = summ["Cost/Application"]["total"]
+    result["publisher_report"] = pr
+    await db.reports.update_one(
+        {"id": report_id},
+        {"$set": {"result": result, "publisher_amount_spent": payload.amount_spent,
+                  "publisher_cpa": payload.cpa, "updated_at": now_iso()}},
+    )
+    return await db.reports.find_one({"id": report_id}, {"_id": 0})
+
+
 @api_router.get("/reports/{report_id}/export")
 async def export_report(report_id: str):
     doc = await db.reports.find_one({"id": report_id}, {"_id": 0})

@@ -16,6 +16,9 @@ export default function ReportView() {
   const [amount, setAmount] = useState({});
   const [addAttr, setAddAttr] = useState({});
   const [saving, setSaving] = useState(false);
+  const [pubAmount, setPubAmount] = useState({});
+  const [pubCpa, setPubCpa] = useState({});
+  const [pubSaving, setPubSaving] = useState(false);
 
   const fetchDoc = useCallback(async () => {
     const d = await api.getReport(id);
@@ -23,6 +26,8 @@ export default function ReportView() {
     if (d.status === "ready") {
       setAmount(d.amount_spent || {});
       setAddAttr(d.additional_attributed || {});
+      setPubAmount(d.publisher_amount_spent || {});
+      setPubCpa(d.publisher_cpa || {});
     }
     return d;
   }, [id]);
@@ -46,6 +51,17 @@ export default function ReportView() {
       toast.success("Amounts updated — CPA recalculated");
     } catch { toast.error("Could not update"); }
     setSaving(false);
+  };
+
+  const savePublisherAmounts = async () => {
+    setPubSaving(true);
+    try {
+      const clean = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Number(v) || 0]));
+      const d = await api.updatePublisherAmounts(id, { amount_spent: clean(pubAmount), cpa: clean(pubCpa) });
+      setDoc(d);
+      toast.success("Publisher spend updated");
+    } catch { toast.error("Could not update publisher spend"); }
+    setPubSaving(false);
   };
 
   if (!doc) return <div className="p-8"><div className="h-96 bg-slate-100 rounded-md animate-pulse" /></div>;
@@ -135,7 +151,35 @@ export default function ReportView() {
         </div>
       </div>
 
-      <ReportTabs result={doc.result} />
+      <ReportTabs result={doc.result} publisherPanel={
+        doc.result.publisher_report && doc.result.publisher_report.programs?.length ? (
+          <div className="mb-4 bg-white border border-slate-200 rounded-md p-5" data-testid="publisher-spend-panel">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-display font-bold text-slate-900">Publisher Ad Spend & CPA</h3>
+              <Button size="sm" onClick={savePublisherAmounts} disabled={pubSaving}
+                      className="gap-2 bg-[#002FA7] hover:bg-[#002FA7]/90" data-testid="save-publisher-btn">
+                <FloppyDisk size={16} weight="bold" /> {pubSaving ? "Saving…" : "Recalculate"}
+              </Button>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Enter Amount Spent directly, OR a known CPA — total cost = CPA × applied leads. Cost/Application uses applied leads as the application proxy.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {doc.result.publisher_report.programs.map((pub) => (
+                <div key={pub} className="border border-slate-200 rounded-md p-3">
+                  <p className="font-semibold text-sm text-slate-700 mb-2 truncate" title={pub}>{pub}</p>
+                  <label className="text-xs text-slate-500">Amount spent</label>
+                  <Input data-testid={`pub-amount-${pub}`} type="number" value={pubAmount[pub] ?? ""} className="mt-1 mb-2"
+                         onChange={(e) => setPubAmount({ ...pubAmount, [pub]: e.target.value })} />
+                  <label className="text-xs text-slate-500">Known CPA (₹)</label>
+                  <Input data-testid={`pub-cpa-${pub}`} type="number" value={pubCpa[pub] ?? ""} className="mt-1"
+                         onChange={(e) => setPubCpa({ ...pubCpa, [pub]: e.target.value })} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null
+      } />
     </div>
   );
 }

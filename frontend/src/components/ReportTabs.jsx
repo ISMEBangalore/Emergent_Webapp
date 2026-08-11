@@ -1,7 +1,7 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReportTable } from "@/components/ReportTable";
 
-export const ReportTabs = ({ result }) => {
+export const ReportTabs = ({ result, publisherPanel = null }) => {
   const pub = result.publisher_report;
   const pubEmpty =
     !pub || !pub.programs?.length || (pub.programs.length === 1 && pub.programs[0] === "Unknown");
@@ -23,7 +23,10 @@ export const ReportTabs = ({ result }) => {
             Your real CRM export will populate this automatically.
           </div>
         ) : (
-          <ReportTable result={pub} />
+          <>
+            {publisherPanel}
+            <ReportTable result={pub} />
+          </>
         )}
       </TabsContent>
     </Tabs>

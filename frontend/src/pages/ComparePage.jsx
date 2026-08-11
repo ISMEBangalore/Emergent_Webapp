@@ -5,6 +5,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { TrendUp, TrendDown, Minus, ArrowsDownUp } from "@phosphor-icons/react";
+import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell } from "recharts";
 
 const extract = (res, label, prog, isMatrix) => {
   if (isMatrix) {
@@ -100,6 +101,33 @@ export default function ComparePage() {
           </Select>
         </div>
       </div>
+
+      {cur && prev && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-testid="compare-charts">
+          {["Total Leads", "Verified Leads", "Total No. of Applications", "Relevant Leads"].map((label) => {
+            const c = extract(cur.result, label, prog, false) || 0;
+            const p = extract(prev.result, label, prog, false) || 0;
+            const up = c >= p;
+            const data = [{ name: "Prev", v: p }, { name: "This", v: c }];
+            return (
+              <div key={label} className="bg-white border border-slate-200 rounded-md p-4" data-testid={`compare-chart-${label}`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1 truncate">{label}</p>
+                <p className="font-display text-xl font-extrabold text-slate-900">{fmtInt(c)}</p>
+                <ResponsiveContainer width="100%" height={64}>
+                  <BarChart data={data} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                    <Tooltip cursor={{ fill: "#f1f5f9" }} formatter={(v) => fmtInt(v)} />
+                    <Bar dataKey="v" radius={[3, 3, 0, 0]}>
+                      <Cell fill="#cbd5e1" />
+                      <Cell fill={up ? "#10B981" : "#EF4444"} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {!cur || !prev ? (
         <div className="bg-white border border-dashed border-slate-300 rounded-md p-12 text-center text-slate-500">
