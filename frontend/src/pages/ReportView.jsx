@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
-import { ReportTable } from "@/components/ReportTable";
+import { ReportTabs } from "@/components/ReportTabs";
 import { KpiCards } from "@/components/KpiCards";
 import { StatusBadge } from "@/pages/Dashboard";
 import { Button } from "@/components/ui/button";
@@ -135,8 +135,7 @@ export default function ReportView() {
         </div>
       </div>
 
-      <h3 className="font-display font-bold text-slate-900 mt-8 mb-3">Program × Lead-Stage Report</h3>
-      <ReportTable result={doc.result} />
+      <ReportTabs result={doc.result} />
     </div>
   );
 }

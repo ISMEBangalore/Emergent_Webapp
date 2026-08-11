@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
-import { ReportTable } from "@/components/ReportTable";
+import { ReportTabs } from "@/components/ReportTabs";
 import { KpiCards } from "@/components/KpiCards";
 import { Button } from "@/components/ui/button";
 import { DownloadSimple, ArrowLeft, ChartLineUp } from "@phosphor-icons/react";
@@ -44,8 +44,7 @@ export default function CumulativeView() {
       ) : (
         <>
           <KpiCards kpis={doc.kpis} />
-          <h3 className="font-display font-bold text-slate-900 mt-8 mb-3">Program × Lead-Stage — Till Date</h3>
-          <ReportTable result={doc.result} />
+          <ReportTabs result={doc.result} />
         </>
       )}
     </div>

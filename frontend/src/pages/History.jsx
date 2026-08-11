@@ -5,7 +5,7 @@ import { StatusBadge } from "@/pages/Dashboard";
 import { fmtInt, fmtMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Trash, ArrowRight, ClockCounterClockwise } from "@phosphor-icons/react";
+import { Trash, ArrowRight, ClockCounterClockwise, ChartLineUp, ArrowsDownUp } from "@phosphor-icons/react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
