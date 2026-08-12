@@ -121,6 +121,8 @@ class SettingsIn(BaseModel):
     application_code_field_apps: Optional[str] = None
     exclude_test_leads: Optional[bool] = None
     test_keywords: Optional[List[str]] = None
+    excluded_publishers: Optional[List[str]] = None
+    included_publishers: Optional[List[str]] = None
 
 
 @api_router.get("/settings")
@@ -133,6 +135,24 @@ async def update_settings(payload: SettingsIn):
     update = {k: v for k, v in payload.model_dump().items() if v is not None}
     await db.settings.update_one({"_id": "global"}, {"$set": update}, upsert=True)
     return await get_settings()
+
+
+@api_router.get("/available")
+async def available_dimensions():
+    """Union of Courses and Publishers detected across all generated reports."""
+    reports = await db.reports.find({"status": "ready"}, {"_id": 0, "result.data_quality": 1}).to_list(2000)
+    courses: Dict[str, int] = {}
+    publishers: Dict[str, int] = {}
+    for r in reports:
+        dq = (r.get("result") or {}).get("data_quality") or {}
+        for c in dq.get("available_courses", []) or []:
+            courses[c["name"]] = courses.get(c["name"], 0) + int(c.get("count", 0))
+        for p in dq.get("available_publishers", []) or []:
+            publishers[p["name"]] = publishers.get(p["name"], 0) + int(p.get("count", 0))
+    return {
+        "courses": [{"name": k, "count": v} for k, v in sorted(courses.items(), key=lambda x: -x[1])],
+        "publishers": [{"name": k, "count": v} for k, v in sorted(publishers.items(), key=lambda x: -x[1])],
+    }
 
 
 # ---------------- Reports ----------------

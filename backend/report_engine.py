@@ -35,6 +35,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "application_code_field": "Agent Code",
     "exclude_test_leads": True,
     "test_keywords": ["test"],
+    "excluded_publishers": [],
+    "included_publishers": [],
 }
 
 PROGRAM_CANDIDATES = ["Course", "Programme", "Program", "Form Interested In"]
@@ -73,6 +75,22 @@ def _find_col(df: pd.DataFrame, candidates: List[str], prefer_data: bool = False
             if df[m].notna().any():
                 return m
     return matches[0]
+
+
+def program_series(series: pd.Series, programs: List[str]) -> pd.Series:
+    """Map a Course/Programme column to one of the configured program names.
+    Exact (alnum) match first, then substring; blank/unknown -> None."""
+    up = series.astype("string").fillna("")
+    key = up.str.upper().str.replace(r"[^A-Z0-9]", "", regex=True)
+    out = pd.Series([None] * len(series), index=series.index, dtype="object")
+    prog_keys = [(p, re.sub(r"[^A-Z0-9]", "", str(p).upper())) for p in programs]
+    for p, pk in prog_keys:
+        if pk:
+            out = out.mask(out.isna() & (key == pk), p)
+    for p, pk in prog_keys:
+        if pk:
+            out = out.mask(out.isna() & (key != "") & key.str.contains(re.escape(pk), regex=True), p)
+    return out
 
 
 def _prog_from_series(s: pd.Series) -> pd.Series:
@@ -140,7 +158,7 @@ def compute_report(
 
     # ---- Program (vectorised) ----
     if col_prog is not None:
-        prog = _prog_from_series(df[col_prog])
+        prog = program_series(df[col_prog], programs)
     else:
         prog = pd.Series([None] * n, index=df.index, dtype="object")
     # Fallback via widget / payment where program still unknown
@@ -228,11 +246,23 @@ def compute_report(
     (total_leads, verified_leads, redirect_leads, redirect_verified,
      api_leads, api_verified, relevant_leads, matrix_counts) = agg(work, "prog", all_cols)
 
-    # ---- Publisher breakdown (top publishers by volume, rest -> Other) ----
+    # ---- Publisher breakdown (all detected publishers, honouring include/exclude) ----
     pub_vc = work["pub"].value_counts()
-    top_pubs = [str(x) for x in pub_vc.head(12).index.tolist()]
-    work["pub"] = work["pub"].where(work["pub"].isin(top_pubs), "Other")
-    pub_cats = top_pubs + (["Other"] if len(pub_vc) > len(top_pubs) else [])
+    available_publishers = [{"name": str(k), "count": int(v)} for k, v in pub_vc.items()][:200]
+    excluded = {str(e).strip().upper() for e in cfg.get("excluded_publishers", []) if str(e).strip()}
+    included = [str(i).strip() for i in cfg.get("included_publishers", []) if str(i).strip()]
+    ordered = [str(x) for x in pub_vc.index.tolist()]
+    if included:
+        incl_up = {i.upper() for i in included}
+        ordered = [p for p in ordered if p.upper() in incl_up]
+    ordered = [p for p in ordered if p.upper() not in excluded]
+    pub_cats = ordered[:40] or ["Unknown"]
+    if col_prog is not None:
+        cvc = df[col_prog].astype("string").str.strip()
+        cvc = cvc[cvc.notna() & (cvc != "")].value_counts()
+        available_courses = [{"name": str(k), "count": int(v)} for k, v in cvc.items()][:80]
+    else:
+        available_courses = []
 
     def make_publisher_result(frame):
         (t, ver, rd, rdv, ap, apv, rel, mc) = agg(frame, "pub", pub_cats)
@@ -275,6 +305,8 @@ def compute_report(
     )
     result["publisher_report"] = publisher_result
     result["publisher_reports"] = publisher_reports
+    result["data_quality"]["available_courses"] = available_courses
+    result["data_quality"]["available_publishers"] = available_publishers
 
     # Program breakdown per publisher (columns = programs, one report per publisher)
     def make_program_result(frame):
@@ -475,9 +507,7 @@ def aggregate_reports(reports, settings):
             for m in pr.get("matrix", []):
                 for c, v in m["values"].items():
                     totals[c] = totals.get(c, 0) + (v or 0)
-        pub_cols = [c for c, _ in sorted(totals.items(), key=lambda x: -x[1]) if c != "Other"][:12]
-        if "Other" in totals:
-            pub_cols.append("Other")
+        pub_cols = [c for c, _ in sorted(totals.items(), key=lambda x: -x[1]) if c != "Other"][:40]
         cum = _aggregate(pub_results, pub_cols, stage_rows)
         cum["data_quality"] = {"weeks_aggregated": weeks}
         return cum

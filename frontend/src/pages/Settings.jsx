@@ -12,9 +12,13 @@ import { FloppyDisk, Info } from "@phosphor-icons/react";
 export default function Settings() {
   const [s, setS] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [avail, setAvail] = useState({ courses: [], publishers: [] });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { api.getSettings().then(setS); }, []);
+  useEffect(() => {
+    api.getSettings().then(setS);
+    api.getAvailable().then(setAvail).catch(() => {});
+  }, []);
   if (!s) return <div className="p-8">Loading…</div>;
 
   const save = async () => {
@@ -30,11 +34,22 @@ export default function Settings() {
         application_code_field_apps: s.application_code_field_apps,
         exclude_test_leads: s.exclude_test_leads,
         test_keywords: s.test_keywords,
+        included_publishers: s.included_publishers,
+        excluded_publishers: s.excluded_publishers,
       };
       await api.updateSettings(payload);
-      toast.success("Settings saved — applied to new reports");
+      toast.success("Settings saved — regenerate a report to apply");
     } catch { toast.error("Save failed"); }
     setSaving(false);
+  };
+
+  const toggleCourse = (name) => {
+    const cur = s.programs || [];
+    setS({ ...s, programs: cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name] });
+  };
+  const togglePublisher = (name) => {
+    const inc = s.included_publishers || [];
+    setS({ ...s, included_publishers: inc.includes(name) ? inc.filter((x) => x !== name) : [...inc, name] });
   };
 
   const listField = (label, key, help) => (
@@ -58,7 +73,45 @@ export default function Settings() {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-md p-6 space-y-6">
-        {listField("Programs (columns)", "programs", "Comma-separated. Total = sum of these programs.")}
+        {listField("Programs / Courses (columns)", "programs", "Comma-separated, or pick from detected courses below. Total = sum of these.")}
+        {avail.courses.length > 0 && (
+          <div className="flex flex-wrap gap-2" data-testid="available-courses">
+            {avail.courses.map((c) => {
+              const on = (s.programs || []).includes(c.name);
+              return (
+                <button key={c.name} data-testid={`course-chip-${c.name}`} onClick={() => toggleCourse(c.name)}
+                        className={`px-3 py-1 rounded-full text-sm border transition-colors ${on ? "bg-[#002FA7] text-white border-[#002FA7]" : "border-slate-200 text-slate-600 hover:border-[#002FA7]"}`}>
+                  {c.name} <span className="opacity-60">({c.count.toLocaleString()})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="border-t border-slate-100 pt-5">
+          <Label className="text-sm font-semibold text-slate-700">Publishers to include (columns)</Label>
+          <p className="text-xs text-slate-400 mb-2">Pick which publishers appear in the By-Publisher report. None selected = show all detected.</p>
+          {avail.publishers.length === 0 ? (
+            <p className="text-xs text-slate-400">Generate a report first to detect publishers from your file.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2" data-testid="available-publishers">
+              {avail.publishers.map((p) => {
+                const inc = s.included_publishers || [];
+                const on = inc.length === 0 || inc.includes(p.name);
+                return (
+                  <button key={p.name} data-testid={`pub-chip-${p.name}`} onClick={() => togglePublisher(p.name)}
+                          className={`px-3 py-1 rounded-full text-sm border transition-colors ${on ? "bg-[#002FA7] text-white border-[#002FA7]" : "border-slate-200 text-slate-400 hover:border-[#002FA7]"}`}>
+                    {p.name} <span className="opacity-60">({p.count.toLocaleString()})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {(s.included_publishers || []).length > 0 && (
+            <button data-testid="pub-clear" onClick={() => setS({ ...s, included_publishers: [] })}
+                    className="mt-2 text-xs text-[#002FA7] underline">Clear selection (show all)</button>
+          )}
+        </div>
 
         <div>
           <Label className="text-sm font-semibold text-slate-700">Verified lead definition</Label>

@@ -1,0 +1,45 @@
+{
+  "summary": "Validated all three LeadPulse fixes end-to-end through the public API and browser. Coupon-code uploads counted Discount Coupon/Coupon Code values correctly while treating blank/NA/N/A/0/-/nil as without-code; fresh samples exposed exactly all 11 publishers including NVT with no Sulekha/Other; include, exclude, clear, and course selections applied only to new reports; /api/available exposed counted dimensions; all requested report, patch, export, trend, cumulative, date-validation, and TEST-lead regressions passed. Settings persistence and all three report tabs also passed with no console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Report Till Date date range",
+        "issues": [
+          "From/To still use browser-native input[type=date] controls rather than the available shadcn calendar/date-range component, so picker UX remains browser-dependent."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional UX follow-up: replace native cumulative date fields with the shadcn date-range picker.",
+    "Add retryable error states to Dashboard, History, ReportView, Compare, and Settings initial API loads; current uncaught request failures can leave skeleton/loading or blank states indefinitely."
+  ],
+  "critical_code_review_comments": [
+    "Dashboard.load, History.load, ReportView.fetchDoc/poll, ComparePage initial requests, and Settings initial getSettings request do not catch API failures or expose retry actions. CumulativeView already demonstrates the expected try/catch/finally pattern.",
+    "report_engine.aggregate_reports still limits cumulative publisher columns to 12 and conditionally carries an Other column, while fresh weekly reports allow up to 40 and intentionally omit Other. This did not fail the supplied 11-publisher sample, but cumulative views can silently diverge for future files with more than 12 publishers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest cases)",
+    "frontend": "100% of requested functional flows passed"
+  },
+  "seed_data_creation": "Backend tests created coupon-upload, TEST-filter, and multiple settings-specific sample reports; browser E2E created one sample. Every test-created report was deleted. Exactly the two pre-existing ready sample reports remain, and settings were explicitly reset to programs ['B.Com','BBA','PGDM'], included_publishers [], and excluded_publishers [].",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fresh sample publisher_report.programs matched exactly Collegedunia, Shiksha, Google Ads, Meta Ads, CollegeSearch, GetMyUni, CareerS360, NVT, Organic, Referral, and Telephony Inbound. Coupon upload expected/passed with-code B.Com/BBA/PGDM = 1/2/1 and without-code = 1/2/3. PGDM+BBA selection retained APPLIED 71/41 and Total 112. Publisher include exact ['Collegedunia','NVT'], NVT exclusion, clear-to-all, /api/available, nested publisher_reports/program_reports, both amount patches, two XLSX exports, trends, invalid/reversed dates, and TEST exclusion all passed. Production frontend build compiled successfully; browser tested Settings reload persistence, fresh sample generation, three tabs, filters, Dashboard, Week Compare, Report Till Date, and History without console errors.",
+  "rca_of_the_issue": "No functional defect reproduced. The three fixes work because application parsing normalizes known blank tokens, report generation derives publisher/course dimensions from file data and snapshots settings per new report, and the Settings page persists those dimensions through the settings API. Residual cumulative inconsistency is caused by the older aggregate_reports top-12/Other logic not being aligned with the newer weekly-report publisher logic."
+}

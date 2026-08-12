@@ -8,6 +8,7 @@ const client = axios.create({ baseURL: API });
 export const api = {
   getSettings: () => client.get("/settings").then((r) => r.data),
   updateSettings: (body) => client.put("/settings", body).then((r) => r.data),
+  getAvailable: () => client.get("/available").then((r) => r.data),
   listReports: () => client.get("/reports").then((r) => r.data),
   getReport: (id) => client.get(`/reports/${id}`).then((r) => r.data),
   deleteReport: (id) => client.delete(`/reports/${id}`).then((r) => r.data),

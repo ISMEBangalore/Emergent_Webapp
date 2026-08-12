@@ -45,9 +45,11 @@ for bucket, counts in DIST.items():
             is_verified = verified_bucket or (random.random() < 0.02)
             origin = random.choices(["API Lead", "Redirect", "Organic"], weights=[0.55, 0.02, 0.43])[0]
             publisher = random.choices(
-                ["Collegedunia", "Shiksha", "CollegeSearch", "Google Ads", "Meta Ads", "Organic/Direct", "Sulekha"],
-                weights=[0.28, 0.20, 0.12, 0.15, 0.13, 0.08, 0.04],
+                ["Collegedunia", "Shiksha", "CollegeSearch", "Google Ads", "Meta Ads",
+                 "GetMyUni", "CareerS360", "NVT", "Organic", "Referral", "Telephony Inbound"],
+                weights=[0.20, 0.16, 0.10, 0.13, 0.11, 0.07, 0.06, 0.06, 0.05, 0.03, 0.03],
             )[0]
+            coupon = random.choice(["", "", "", "SCH500", "EARLY10", "REF25"])
             rows.append({
                 "Registered Name": f"Applicant {uid}",
                 "Course": prog,
@@ -57,6 +59,7 @@ for bucket, counts in DIST.items():
                 "Mobile Verification Status": "VERIFIED" if is_verified else "NOT VERIFIED",
                 "Lead Origin(Primary)": origin,
                 "Publisher Name": publisher,
+                "Discount Coupon": coupon,
                 "Agent Code": f"AG{random.randint(100,140)}" if random.random() < 0.4 else "",
                 "Lead Id": f"LID{uid}",
             })
