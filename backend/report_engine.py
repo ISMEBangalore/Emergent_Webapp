@@ -37,6 +37,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "test_keywords": ["test"],
     "excluded_publishers": [],
     "included_publishers": [],
+    "applications_payment_approved_only": True,
 }
 
 PROGRAM_CANDIDATES = ["Course", "Programme", "Program", "Form Interested In"]

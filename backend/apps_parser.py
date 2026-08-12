@@ -19,6 +19,8 @@ CODE_CANDS = [
     "Referral Coupon", "Code", "Voucher Code", "Voucher", "Scholarship Code",
 ]
 BLANK_TOKENS = {"", "NA", "N/A", "NAN", "NONE", "NULL", "0", "-", "NO", "NIL"}
+PAY_STATUS_CANDS = ["Payment Status", "Payment Approval Status", "Payment Approved"]
+PAY_DATE_CANDS = ["Payment Approved Date"]
 APP_DATE_CANDS = [
     "Registration Date", "User Registration Date", "Created On", "Application Date",
     "Created Date", "Payment Date", "Date",
@@ -56,6 +58,21 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
                 df = df[keep.fillna(False)].reset_index(drop=True)
                 if len(df) == 0:
                     continue
+        # ---- Count only payment-approved applications ----
+        if settings.get("applications_payment_approved_only", True):
+            col_pay = _find_col(df, PAY_STATUS_CANDS, prefer_data=True)
+            if col_pay is not None:
+                paid = df[col_pay].astype("string").str.strip().str.upper().eq("PAYMENT APPROVED").fillna(False)
+            else:
+                col_paydate = _find_col(df, PAY_DATE_CANDS, prefer_data=True)
+                if col_paydate is not None:
+                    v = df[col_paydate].astype("string").str.strip().str.upper().fillna("")
+                    paid = ~v.isin(BLANK_TOKENS)
+                else:
+                    paid = pd.Series(True, index=df.index)
+            df = df[paid].reset_index(drop=True)
+            if len(df) == 0:
+                continue
         col_origin = _find_col(df, ORIGIN_CANDS, prefer_data=True)
         cands = ([code_field] if code_field else []) + CODE_CANDS
         col_code = _find_col(df, cands, prefer_data=True)

@@ -125,6 +125,7 @@ class SettingsIn(BaseModel):
     test_keywords: Optional[List[str]] = None
     excluded_publishers: Optional[List[str]] = None
     included_publishers: Optional[List[str]] = None
+    applications_payment_approved_only: Optional[bool] = None
 
 
 @api_router.get("/settings")

@@ -36,6 +36,7 @@ export default function Settings() {
         test_keywords: s.test_keywords,
         included_publishers: s.included_publishers,
         excluded_publishers: s.excluded_publishers,
+        applications_payment_approved_only: s.applications_payment_approved_only,
       };
       await api.updateSettings(payload);
       toast.success("Settings saved — regenerate a report to apply");
@@ -148,6 +149,20 @@ export default function Settings() {
             <Input data-testid="setting-test-keywords" value={(s.test_keywords || []).join(", ")}
                    onChange={(e) => setS({ ...s, test_keywords: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
                    className="mt-1" placeholder="test" />
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-semibold text-slate-700">Count only payment-approved applications</Label>
+              <p className="text-xs text-slate-400 mt-0.5">When on, an application counts only if its Payment Status is "PAYMENT APPROVED" (then split into with/without code).</p>
+            </div>
+            <button type="button" data-testid="setting-payment-approved"
+                    onClick={() => setS({ ...s, applications_payment_approved_only: !(s.applications_payment_approved_only ?? true) })}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${(s.applications_payment_approved_only ?? true) ? "bg-[#002FA7]" : "bg-slate-300"}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${(s.applications_payment_approved_only ?? true) ? "left-[22px]" : "left-0.5"}`} />
+            </button>
           </div>
         </div>
 

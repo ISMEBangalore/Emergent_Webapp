@@ -81,6 +81,14 @@ auto-generates a weekly report (Program × Lead-Stage matrix + derived metrics) 
 - Real-file totals confirmed: B.Com 21,940 · BBA 31,573 · PGDM 63,448 (116,961 total); apps
   665/1,073/1,695; 26 publishers + 21 courses detected; coverage 2025-10-05 → 2026-08-10.
 
+## Payment-approved applications only — 2026-06
+- Applications now count ONLY payment-approved rows, then split into with/without code.
+  Filter: `Payment Status == "PAYMENT APPROVED"` (fallback: non-empty `Payment Approved Date`).
+- Setting `applications_payment_approved_only` (default True) + Settings toggle to turn off.
+- Verified end-to-end on real files: approved apps = 1,533 (PGDM file 916 + UG file 617), split
+  with-code 663 / without-code 870; matches the file's Payment Status distribution exactly.
+  (Old "count all rows" gave 3,433.)
+
 ## Backlog / Next
 - P1: Per-program application file → program auto-detect from filename.
 - P1: shadcn calendar date picker on Generate page (currently native date input).
