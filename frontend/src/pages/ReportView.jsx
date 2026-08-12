@@ -7,7 +7,7 @@ import { StatusBadge } from "@/pages/Dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { DownloadSimple, ArrowLeft, Warning, FloppyDisk, Info, ArrowsClockwise, CalendarBlank } from "@phosphor-icons/react";
+import { DownloadSimple, ArrowLeft, Warning, FloppyDisk, Info, ArrowsClockwise, CalendarBlank, BookmarkSimple, Trash } from "@phosphor-icons/react";
 
 export default function ReportView() {
   const { id } = useParams();
@@ -22,6 +22,8 @@ export default function ReportView() {
   const [rStart, setRStart] = useState("");
   const [rEnd, setREnd] = useState("");
   const [regen, setRegen] = useState(false);
+  const [views, setViews] = useState([]);
+  const [viewName, setViewName] = useState("");
 
   const fetchDoc = useCallback(async () => {
     const d = await api.getReport(id);
@@ -71,21 +73,58 @@ export default function ReportView() {
     setPubSaving(false);
   };
 
-  const regenerate = async () => {
+  const loadViews = useCallback(() => { api.listViews().then(setViews).catch(() => {}); }, []);
+  useEffect(() => { loadViews(); }, [loadViews]);
+
+  const pollUntilReady = () => {
+    const poll = async () => {
+      const d = await fetchDoc();
+      if (d.status === "processing") setTimeout(poll, 2000);
+      else setRegen(false);
+    };
+    poll();
+  };
+
+  const regenerate = async (start = rStart, end = rEnd) => {
     setRegen(true);
     try {
-      await api.regenerateReport(id, { start: rStart, end: rEnd });
+      await api.regenerateReport(id, { start, end });
       toast.success("Regenerating with your current settings…");
-      const poll = async () => {
-        const d = await fetchDoc();
-        if (d.status === "processing") setTimeout(poll, 2000);
-        else setRegen(false);
-      };
-      poll();
+      pollUntilReady();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not regenerate");
       setRegen(false);
     }
+  };
+
+  const saveView = async () => {
+    const name = viewName.trim();
+    if (!name) { toast.error("Name your view first"); return; }
+    try {
+      await api.createView({ name, programs: doc.result.programs, start: rStart || null, end: rEnd || null });
+      setViewName("");
+      loadViews();
+      toast.success(`Saved view "${name}"`);
+    } catch { toast.error("Could not save view"); }
+  };
+
+  const applyView = async (v) => {
+    setRegen(true);
+    try {
+      await api.updateSettings({ programs: v.programs });
+      setRStart(v.start || ""); setREnd(v.end || "");
+      await api.regenerateReport(id, { start: v.start || "", end: v.end || "" });
+      toast.success(`Applied view "${v.name}"`);
+      pollUntilReady();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not apply view");
+      setRegen(false);
+    }
+  };
+
+  const removeView = async (v) => {
+    try { await api.deleteView(v.id); loadViews(); toast.success("View deleted"); }
+    catch { toast.error("Could not delete view"); }
   };
 
   if (!doc) return <div className="p-8"><div className="h-96 bg-slate-100 rounded-md animate-pulse" /></div>;
@@ -162,7 +201,7 @@ export default function ReportView() {
               <label className="text-xs uppercase tracking-wide text-slate-500">To</label>
               <Input data-testid="regen-end" type="date" value={rEnd} onChange={(e) => setREnd(e.target.value)} className="mt-1 w-44" />
             </div>
-            <Button data-testid="regen-btn" onClick={regenerate} disabled={regen} className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2">
+            <Button data-testid="regen-btn" onClick={() => regenerate()} disabled={regen} className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2">
               <ArrowsClockwise size={16} weight="bold" /> {regen ? "Working…" : "Apply & Regenerate"}
             </Button>
             {(rStart || rEnd) && (
@@ -170,6 +209,40 @@ export default function ReportView() {
             )}
           </div>
           <p className="text-xs text-slate-400 mt-2">Regenerate re-runs on the saved upload using your current Settings (selected programs, publishers, rules) — no re-upload needed.</p>
+
+          <div className="border-t border-slate-100 mt-4 pt-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <BookmarkSimple size={16} weight="bold" color="#002FA7" />
+              <span className="text-sm font-semibold text-slate-700">Saved views</span>
+            </div>
+            {views.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mb-3" data-testid="saved-views">
+                {views.map((v) => (
+                  <div key={v.id} data-testid={`view-chip-${v.id}`}
+                       className="group flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full border border-slate-200 text-sm text-slate-700 hover:border-[#002FA7]">
+                    <button data-testid={`view-apply-${v.id}`} onClick={() => applyView(v)} disabled={regen} className="hover:text-[#002FA7]">
+                      {v.name}
+                      <span className="opacity-50 ml-1">
+                        · {v.programs?.length || 0} prog{(v.start || v.end) ? " · dated" : ""}
+                      </span>
+                    </button>
+                    <button data-testid={`view-delete-${v.id}`} onClick={() => removeView(v)} className="text-slate-300 hover:text-red-500">
+                      <Trash size={13} weight="bold" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 mb-3">No saved views yet. Save the current program selection + date range as a one-click view.</p>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Input data-testid="view-name-input" value={viewName} onChange={(e) => setViewName(e.target.value)}
+                     placeholder="e.g. PGDM · Oct–Dec" className="w-56 h-9" />
+              <Button data-testid="view-save-btn" onClick={saveView} variant="outline" size="sm" className="gap-1.5">
+                <BookmarkSimple size={15} weight="bold" /> Save current view
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

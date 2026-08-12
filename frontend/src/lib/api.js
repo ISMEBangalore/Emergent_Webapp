@@ -19,6 +19,9 @@ export const api = {
   regenerateReport: (id, body) => client.post(`/reports/${id}/regenerate`, body).then((r) => r.data),
   updatePublisherAmounts: (id, body) => client.patch(`/reports/${id}/publisher-amounts`, body).then((r) => r.data),
   trends: () => client.get("/trends").then((r) => r.data),
+  listViews: () => client.get("/views").then((r) => r.data),
+  createView: (body) => client.post("/views", body).then((r) => r.data),
+  deleteView: (id) => client.delete(`/views/${id}`).then((r) => r.data),
   getCumulative: (params) => client.get("/reports/cumulative", { params }).then((r) => r.data),
   cumulativeExportUrl: (params) => {
     const q = new URLSearchParams(Object.entries(params || {}).filter(([, v]) => v)).toString();

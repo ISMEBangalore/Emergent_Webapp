@@ -70,6 +70,17 @@ auto-generates a weekly report (Program × Lead-Stage matrix + derived metrics) 
 - ReportView: added date-coverage line + From/To + "Apply & Regenerate" panel (only when a source
   file is stored). Verified: full 1,740 → Oct–Dec slice 360; coverage shown 2024-10-20→2026-08-09.
 
+## Saved Views + large-upload verified — 2026-06
+- Saved Views: `GET/POST/DELETE /api/views` store {name, programs, start, end}. On ReportView users
+  can Save current view (programs + date range) and one-click Apply (updates settings.programs +
+  regenerates on the stored file). Verified create/list/apply/delete.
+- LARGE UPLOAD VERIFIED: real 98MB (102,668,308 bytes) lead file uploaded through the app gateway
+  → HTTP 200 in 4.3s (no ingress size limit hit). Full compute of 156,944 rows finished in ~40s.
+  NOTE: saving backend code during processing hot-reloads uvicorn and kills the in-flight background
+  task (report stuck "processing") — recover via regenerate (file is safely in GridFS).
+- Real-file totals confirmed: B.Com 21,940 · BBA 31,573 · PGDM 63,448 (116,961 total); apps
+  665/1,073/1,695; 26 publishers + 21 courses detected; coverage 2025-10-05 → 2026-08-10.
+
 ## Backlog / Next
 - P1: Per-program application file → program auto-detect from filename.
 - P1: shadcn calendar date picker on Generate page (currently native date input).

@@ -441,6 +441,42 @@ async def trends():
     return await cursor.to_list(500)
 
 
+# ---------------- Saved Views (programs + date range) ----------------
+class ViewIn(BaseModel):
+    name: str
+    programs: List[str] = []
+    start: Optional[str] = None
+    end: Optional[str] = None
+
+
+@api_router.get("/views")
+async def list_views():
+    return await db.views.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api_router.post("/views")
+async def create_view(payload: ViewIn):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "View name is required.")
+    doc = {
+        "id": str(uuid.uuid4()), "name": name, "programs": payload.programs or [],
+        "start": _validate_date(payload.start, "start"), "end": _validate_date(payload.end, "end"),
+        "created_at": now_iso(),
+    }
+    await db.views.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.delete("/views/{view_id}")
+async def delete_view(view_id: str):
+    res = await db.views.delete_one({"id": view_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "View not found")
+    return {"deleted": True}
+
+
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
