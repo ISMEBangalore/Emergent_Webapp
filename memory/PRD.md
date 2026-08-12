@@ -58,6 +58,18 @@ auto-generates a weekly report (Program × Lead-Stage matrix + derived metrics) 
 - NOTE: BCA (29k), MCA, PhD, "COURSE NOT AVAILABLE" leads fall into "Other" (not shown) because
   only B.Com/BBA/PGDM are configured programs. Add them in Settings if the user wants them shown.
 
+## Selectable programs + regenerate — 2026-06
+- ALL courses detected in the uploaded file are now selectable in Settings (chips). `/available`
+  returns courses/publishers from the LATEST uploaded report (not stale aggregate), so the user
+  sees their real raw course names (B.COM WITH ACCA, BCA, MCA, "PGDM (MKT/FIN/HR/BA/IA)", etc.).
+- `program_series` matching: exact (alnum) match first; substring fallback ONLY for programs with
+  no exact match (canonical short names like B.Com/PGDM). Selecting full raw course names is exact
+  and never double-counts. Verified with unit test on real course list.
+- `POST /reports/{id}/regenerate` now uses the LATEST global settings (selected programs/publishers/
+  rules) + optional date range, re-running on the GridFS-stored file. Persists new settings+range.
+- ReportView: added date-coverage line + From/To + "Apply & Regenerate" panel (only when a source
+  file is stored). Verified: full 1,740 → Oct–Dec slice 360; coverage shown 2024-10-20→2026-08-09.
+
 ## Backlog / Next
 - P1: Per-program application file → program auto-detect from filename.
 - P1: shadcn calendar date picker on Generate page (currently native date input).

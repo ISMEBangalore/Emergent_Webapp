@@ -141,19 +141,18 @@ async def update_settings(payload: SettingsIn):
 
 @api_router.get("/available")
 async def available_dimensions():
-    """Union of Courses and Publishers detected across all generated reports."""
-    reports = await db.reports.find({"status": "ready"}, {"_id": 0, "result.data_quality": 1}).to_list(2000)
-    courses: Dict[str, int] = {}
-    publishers: Dict[str, int] = {}
-    for r in reports:
-        dq = (r.get("result") or {}).get("data_quality") or {}
-        for c in dq.get("available_courses", []) or []:
-            courses[c["name"]] = courses.get(c["name"], 0) + int(c.get("count", 0))
-        for p in dq.get("available_publishers", []) or []:
-            publishers[p["name"]] = publishers.get(p["name"], 0) + int(p.get("count", 0))
+    """Courses and Publishers detected in the latest uploaded report (falls back to
+    any latest ready report). Reflects the file the user is actually working with."""
+    proj = {"_id": 0, "result.data_quality.available_courses": 1,
+            "result.data_quality.available_publishers": 1}
+    doc = await db.reports.find_one({"status": "ready", "source": "upload"}, proj,
+                                    sort=[("created_at", -1)])
+    if not doc:
+        doc = await db.reports.find_one({"status": "ready"}, proj, sort=[("created_at", -1)])
+    dq = ((doc or {}).get("result") or {}).get("data_quality") or {}
     return {
-        "courses": [{"name": k, "count": v} for k, v in sorted(courses.items(), key=lambda x: -x[1])],
-        "publishers": [{"name": k, "count": v} for k, v in sorted(publishers.items(), key=lambda x: -x[1])],
+        "courses": dq.get("available_courses", []) or [],
+        "publishers": dq.get("available_publishers", []) or [],
     }
 
 
@@ -222,11 +221,13 @@ async def regenerate_report(report_id: str, payload: RegenerateIn):
         raise HTTPException(404, "Report not found")
     if not doc.get("lead_file_id"):
         raise HTTPException(400, "This report has no stored source file (e.g. sample). Re-upload to slice by date.")
-    settings = doc.get("settings") or await get_settings()
+    settings = await get_settings()
     lead_bytes = await _read_gridfs(doc["lead_file_id"])
     app_bytes = [await _read_gridfs(fid) for fid in doc.get("app_file_ids", [])]
     date_range = {"start": payload.start or None, "end": payload.end or None}
-    await db.reports.update_one({"id": report_id}, {"$set": {"status": "processing", "updated_at": now_iso()}})
+    await db.reports.update_one({"id": report_id},
+                                {"$set": {"status": "processing", "settings": settings,
+                                          "date_range": date_range, "updated_at": now_iso()}})
     asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
                                  doc.get("amount_spent", {}), doc.get("additional_attributed", {}),
                                  date_range=date_range))

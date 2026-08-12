@@ -103,7 +103,9 @@ def _find_col(df: pd.DataFrame, candidates: List[str], prefer_data: bool = False
 
 def program_series(series: pd.Series, programs: List[str]) -> pd.Series:
     """Map a Course/Programme column to one of the configured program names.
-    Exact (alnum) match first, then substring; blank/unknown -> None."""
+    Exact (alnum) match first; substring fallback only for programs that have
+    no exact match anywhere (e.g. short canonical names like B.Com/PGDM),
+    so selecting a full raw course name stays precise and never double-counts."""
     up = series.astype("string").fillna("")
     key = up.str.upper().str.replace(r"[^A-Z0-9]", "", regex=True)
     out = pd.Series([None] * len(series), index=series.index, dtype="object")
@@ -112,7 +114,7 @@ def program_series(series: pd.Series, programs: List[str]) -> pd.Series:
         if pk:
             out = out.mask(out.isna() & (key == pk), p)
     for p, pk in prog_keys:
-        if pk:
+        if pk and not (key == pk).any():
             out = out.mask(out.isna() & (key != "") & key.str.contains(re.escape(pk), regex=True), p)
     return out
 

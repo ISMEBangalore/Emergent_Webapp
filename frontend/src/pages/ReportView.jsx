@@ -7,7 +7,7 @@ import { StatusBadge } from "@/pages/Dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { DownloadSimple, ArrowLeft, Warning, FloppyDisk, Info } from "@phosphor-icons/react";
+import { DownloadSimple, ArrowLeft, Warning, FloppyDisk, Info, ArrowsClockwise, CalendarBlank } from "@phosphor-icons/react";
 
 export default function ReportView() {
   const { id } = useParams();
@@ -19,6 +19,9 @@ export default function ReportView() {
   const [pubAmount, setPubAmount] = useState({});
   const [pubCpa, setPubCpa] = useState({});
   const [pubSaving, setPubSaving] = useState(false);
+  const [rStart, setRStart] = useState("");
+  const [rEnd, setREnd] = useState("");
+  const [regen, setRegen] = useState(false);
 
   const fetchDoc = useCallback(async () => {
     const d = await api.getReport(id);
@@ -28,6 +31,8 @@ export default function ReportView() {
       setAddAttr(d.additional_attributed || {});
       setPubAmount(d.publisher_amount_spent || {});
       setPubCpa(d.publisher_cpa || {});
+      setRStart(d.date_range?.start || "");
+      setREnd(d.date_range?.end || "");
     }
     return d;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,6 +69,23 @@ export default function ReportView() {
       toast.success("Publisher spend updated");
     } catch { toast.error("Could not update publisher spend"); }
     setPubSaving(false);
+  };
+
+  const regenerate = async () => {
+    setRegen(true);
+    try {
+      await api.regenerateReport(id, { start: rStart, end: rEnd });
+      toast.success("Regenerating with your current settings…");
+      const poll = async () => {
+        const d = await fetchDoc();
+        if (d.status === "processing") setTimeout(poll, 2000);
+        else setRegen(false);
+      };
+      poll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not regenerate");
+      setRegen(false);
+    }
   };
 
   if (!doc) return <div className="p-8"><div className="h-96 bg-slate-100 rounded-md animate-pulse" /></div>;
@@ -117,6 +139,39 @@ export default function ReportView() {
           </Button>
         </a>
       </div>
+
+      {doc.lead_file_id && (
+        <div className="mb-5 bg-white border border-slate-200 rounded-md p-4" data-testid="regen-panel">
+          <div className="flex items-center gap-1.5 mb-1">
+            <CalendarBlank size={16} weight="bold" color="#002FA7" />
+            <span className="text-sm font-semibold text-slate-700">Date range — User Registration Date</span>
+          </div>
+          {dq?.data_date_min ? (
+            <p className="text-xs text-slate-400" data-testid="date-coverage">
+              This upload covers <b>{dq.data_date_min}</b> → <b>{dq.data_date_max}</b>. Leave dates empty for the complete file.
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400">No date column detected — the report uses the complete uploaded file.</p>
+          )}
+          <div className="flex flex-wrap items-end gap-3 mt-3">
+            <div>
+              <label className="text-xs uppercase tracking-wide text-slate-500">From</label>
+              <Input data-testid="regen-start" type="date" value={rStart} onChange={(e) => setRStart(e.target.value)} className="mt-1 w-44" />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wide text-slate-500">To</label>
+              <Input data-testid="regen-end" type="date" value={rEnd} onChange={(e) => setREnd(e.target.value)} className="mt-1 w-44" />
+            </div>
+            <Button data-testid="regen-btn" onClick={regenerate} disabled={regen} className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2">
+              <ArrowsClockwise size={16} weight="bold" /> {regen ? "Working…" : "Apply & Regenerate"}
+            </Button>
+            {(rStart || rEnd) && (
+              <button data-testid="regen-clear" onClick={() => { setRStart(""); setREnd(""); }} className="text-xs text-[#002FA7] underline">Clear (full data)</button>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mt-2">Regenerate re-runs on the saved upload using your current Settings (selected programs, publishers, rules) — no re-upload needed.</p>
+        </div>
+      )}
 
       {showDqWarn && (
         <div className="mb-5 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-md px-4 py-3 text-sm text-amber-800" data-testid="dq-warning">
