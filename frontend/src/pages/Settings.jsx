@@ -13,6 +13,7 @@ export default function Settings() {
   const [s, setS] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { api.getSettings().then(setS); }, []);
   if (!s) return <div className="p-8">Loading…</div>;
 

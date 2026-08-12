@@ -22,7 +22,7 @@ export default function History() {
     setTrends(await api.trends());
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const del = async (id, e) => {
     e.stopPropagation();

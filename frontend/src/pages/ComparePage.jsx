@@ -34,6 +34,7 @@ export default function ComparePage() {
       if (ready[0]) setCurId(ready[0].id);
       if (ready[1]) setPrevId(ready[1].id);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { if (curId) api.getReport(curId).then(setCur); }, [curId]);
@@ -51,6 +52,7 @@ export default function ComparePage() {
       out.push({ label: s.label, fmt: s.fmt, isMatrix: false, group: "Metrics" });
     });
     return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur]);
 
   const fmtVal = (v, fmt) =>

@@ -27,7 +27,7 @@ export default function Dashboard() {
     setTrends(await api.trends());
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runSample = async () => {
     setSampling(true);
@@ -191,7 +191,7 @@ export const StatusBadge = ({ status }) => {
 };
 const Skeleton = () => (
   <div className="animate-pulse space-y-4">
-    <div className="grid grid-cols-4 gap-4">{[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-slate-100 rounded-md" />)}</div>
+    <div className="grid grid-cols-4 gap-4">{[...Array(4)].map((_, i) => <div key={`sk-${i}`} className="h-28 bg-slate-100 rounded-md" />)}</div>
     <div className="h-72 bg-slate-100 rounded-md" />
   </div>
 );

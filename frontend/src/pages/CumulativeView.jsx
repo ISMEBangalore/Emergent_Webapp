@@ -10,6 +10,7 @@ export default function CumulativeView() {
   const nav = useNavigate();
   const [doc, setDoc] = useState(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { api.getCumulative().then(setDoc); }, []);
 
   if (!doc) return <div className="p-8"><div className="h-96 bg-slate-100 rounded-md animate-pulse" /></div>;

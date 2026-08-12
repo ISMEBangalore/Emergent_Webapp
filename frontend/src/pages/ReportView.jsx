@@ -30,6 +30,7 @@ export default function ReportView() {
       setPubCpa(d.publisher_cpa || {});
     }
     return d;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function ReportView() {
     };
     poll();
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchDoc]);
 
   const saveAmounts = async () => {

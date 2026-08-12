@@ -23,6 +23,7 @@ export default function GenerateReport() {
       setSettings(s);
       setWeekLabel(`Week of ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const programs = settings?.programs || ["B.Com", "BBA", "PGDM"];
@@ -146,7 +147,7 @@ const MultiDropzone = ({ files, setFiles }) => (
     {files.length > 0 && (
       <div className="mt-2 space-y-1.5">
         {files.map((f, i) => (
-          <div key={i} className="flex items-center justify-between border border-slate-200 rounded-md px-3 py-2 bg-white text-sm">
+          <div key={`${f.name}-${f.size}`} className="flex items-center justify-between border border-slate-200 rounded-md px-3 py-2 bg-white text-sm">
             <span className="flex items-center gap-2 text-slate-700"><FileXls size={18} weight="fill" color="#10B981" /> {f.name}</span>
             <button onClick={() => setFiles(files.filter((_, x) => x !== i))} className="text-slate-400 hover:text-red-500"><X size={14} weight="bold" /></button>
           </div>

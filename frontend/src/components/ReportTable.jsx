@@ -45,7 +45,7 @@ export const ReportTable = ({ result }) => {
           {result.summary.map((s, idx) => {
             if (s.kind === "section") {
               return (
-                <tr key={idx}>
+                <tr key={s.label || `section-${idx}`}>
                   <td colSpan={programs.length * 2 + 2}
                       className={`${cell} bg-[#FFE699] text-center font-bold italic text-[#C00000]`}>
                     {s.label}
@@ -56,7 +56,7 @@ export const ReportTable = ({ result }) => {
             const isHeader = s.kind === "header";
             const pctOnly = s.fmt === "pct_only";
             return (
-              <tr key={idx} className="hover:bg-slate-50" data-testid={`summary-row-${s.label}`}>
+              <tr key={s.label || `row-${idx}`} className="hover:bg-slate-50" data-testid={`summary-row-${s.label}`}>
                 <td className={`${cell} font-semibold sticky left-0 z-10 ${isHeader ? "bg-[#BDD7EE]" : "bg-[#FFF6DA]"}`}>
                   {s.label}
                 </td>

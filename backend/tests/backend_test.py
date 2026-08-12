@@ -50,6 +50,7 @@ def build_small_lead_xlsx():
     sheet.append(["PGDM", "APPLIED", "VERIFIED", "VERIFIED", "Organic", "A3"])
     sheet.append(["B.Com", "COLD", "", "", "Organic", ""])
     sheet.append(["BBA", "WARM", "VERIFIED", "", "API", ""])
+    sheet.append(["BBA", "Not Interested", "VERIFIED", "VERIFIED", "Organic", ""])
     sheet.append(["PGDM", "JUNK", "", "", "WIDGET", ""])
     output = io.BytesIO()
     workbook.save(output)
@@ -111,6 +112,12 @@ class TestCRMReportAPI:
         assert report["kpis"]["total_leads"] == 22393
         assert report["kpis"]["total_applications"] == 101
         assert isinstance(report["result"]["summary"], list) and len(report["result"]["summary"]) > 10
+        assert isinstance(report["result"]["publisher_report"], dict)
+        assert report["result"]["publisher_report"]["programs"]
+        cold_unverified = next(
+            row for row in report["result"]["matrix"] if row["stage"] == "COLD Unverified leads"
+        )
+        assert cold_unverified["total"] > 0
 
     def test_03_list_is_newest_first_and_excludes_heavy_fields(self, api_client):
         response = api_client.get(f"{BASE_URL}/api/reports", timeout=20)
@@ -165,7 +172,62 @@ class TestCRMReportAPI:
         assert persisted["amount_spent"] == amounts
         assert persisted["additional_attributed"] == attributed
 
-    def test_06_small_real_xlsx_upload_processes_without_crash(self, api_client):
+    def test_06_publisher_amounts_support_cpa_and_direct_spend(self, api_client):
+        report_url = f"{BASE_URL}/api/reports/{STATE['sample_id']}"
+        current = api_client.get(report_url, timeout=20).json()
+        publisher_report = current["result"]["publisher_report"]
+        publisher = next(
+            name
+            for name in publisher_report["programs"]
+            if next(
+                row for row in publisher_report["summary"]
+                if row["label"] == "Total No. of Applications"
+            )["values"].get(name, 0) > 0
+        )
+        applied_count = next(
+            row for row in publisher_report["summary"]
+            if row["label"] == "Total No. of Applications"
+        )["values"][publisher]
+
+        cpa_response = api_client.patch(
+            f"{report_url}/publisher-amounts",
+            json={"amount_spent": {}, "cpa": {publisher: 5000}},
+            timeout=30,
+        )
+        assert cpa_response.status_code == 200
+        cpa_doc = cpa_response.json()
+        cpa_summary = {
+            row["label"]: row for row in cpa_doc["result"]["publisher_report"]["summary"]
+            if "values" in row
+        }
+        assert cpa_summary["Amount Spent"]["values"][publisher] == 5000 * applied_count
+        assert cpa_summary["Cost/Application"]["values"][publisher] == 5000
+        assert cpa_doc["publisher_cpa"][publisher] == 5000
+
+        direct_amount = 12345.0
+        amount_response = api_client.patch(
+            f"{report_url}/publisher-amounts",
+            json={"amount_spent": {publisher: direct_amount}, "cpa": {publisher: 5000}},
+            timeout=30,
+        )
+        assert amount_response.status_code == 200
+        amount_doc = amount_response.json()
+        amount_summary = {
+            row["label"]: row for row in amount_doc["result"]["publisher_report"]["summary"]
+            if "values" in row
+        }
+        assert amount_summary["Amount Spent"]["values"][publisher] == direct_amount
+        assert amount_summary["Cost/Application"]["values"][publisher] == round(direct_amount / applied_count, 2)
+
+        persisted = api_client.get(report_url, timeout=20).json()
+        persisted_summary = {
+            row["label"]: row for row in persisted["result"]["publisher_report"]["summary"]
+            if "values" in row
+        }
+        assert persisted_summary["Amount Spent"]["values"][publisher] == direct_amount
+        STATE["publisher"] = publisher
+
+    def test_07_small_real_xlsx_upload_processes_without_crash(self, api_client):
         label = "TEST_Small upload"
         week_date = date.today().isoformat()
         files = {
@@ -190,15 +252,41 @@ class TestCRMReportAPI:
         report = wait_until_ready(api_client, created["id"])
         assert report["source"] == "upload"
         assert report["lead_filename"] == "TEST_small_leads.xlsx"
-        assert report["result"]["data_quality"]["total_rows"] == 6
+        assert report["result"]["data_quality"]["total_rows"] == 7
         assert report["result"]["data_quality"]["unclassified_program"] == 0
         applied = next(row for row in report["result"]["matrix"] if row["stage"] == "APPLIED")
         assert applied["values"] == {"B.Com": 1, "BBA": 1, "PGDM": 1}
         assert applied["total"] == 3
-        assert report["kpis"]["total_leads"] == 6
+        cold_unverified = next(
+            row for row in report["result"]["matrix"] if row["stage"] == "COLD Unverified leads"
+        )
+        assert cold_unverified["values"] == {"B.Com": 1, "BBA": 1, "PGDM": 0}
+        assert cold_unverified["total"] == 2
+        assert report["kpis"]["total_leads"] == 7
         assert report["kpis"]["amount_spent"] == 600.0
 
-    def test_07_trends_are_ready_sorted_and_contain_kpis(self, api_client):
+    def test_08_cumulative_result_and_export_include_publishers(self, api_client):
+        response = api_client.get(f"{BASE_URL}/api/reports/cumulative", timeout=60)
+        assert response.status_code == 200
+        cumulative = response.json()
+        assert cumulative["id"] == "cumulative"
+        assert cumulative["status"] == "ready"
+        assert cumulative["result"]["data_quality"]["weeks_aggregated"] >= 2
+        assert cumulative["kpis"]["total_leads"] >= 7
+        assert isinstance(cumulative["result"].get("publisher_report"), dict)
+        assert cumulative["result"]["publisher_report"]["programs"]
+
+        export = api_client.get(f"{BASE_URL}/api/reports/cumulative/export", timeout=60)
+        assert export.status_code == 200
+        assert export.headers["content-type"].startswith(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        assert export.content[:2] == b"PK"
+        workbook = load_workbook(io.BytesIO(export.content), read_only=True, data_only=True)
+        assert workbook.sheetnames == ["Weekly Report"]
+        assert workbook["Weekly Report"]["A2"].value == "Lead Stage"
+
+    def test_09_trends_are_ready_sorted_and_contain_kpis(self, api_client):
         response = api_client.get(f"{BASE_URL}/api/trends", timeout=20)
         assert response.status_code == 200
         trends = response.json()
@@ -210,7 +298,7 @@ class TestCRMReportAPI:
         assert STATE["sample_id"] in ids and STATE["upload_id"] in ids
         assert all(isinstance(item.get("kpis"), dict) for item in trends)
 
-    def test_08_delete_reports_and_verify_404(self, api_client):
+    def test_10_delete_reports_and_verify_404(self, api_client):
         for key in ("upload_id", "sample_id"):
             report_id = STATE[key]
             response = api_client.delete(f"{BASE_URL}/api/reports/{report_id}", timeout=20)
@@ -220,7 +308,7 @@ class TestCRMReportAPI:
             assert get_response.status_code == 404
             assert get_response.json()["detail"] == "Report not found"
 
-    def test_09_missing_resource_error_handling(self, api_client):
+    def test_11_missing_resource_error_handling(self, api_client):
         missing = "00000000-0000-0000-0000-000000000000"
         get_response = api_client.get(f"{BASE_URL}/api/reports/{missing}", timeout=20)
         assert get_response.status_code == 404
