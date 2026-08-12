@@ -38,6 +38,14 @@ auto-generates a weekly report (Program × Lead-Stage matrix + derived metrics) 
 - Redirect vs API detected from Lead Origin text patterns.
 - Application "with code" = Discount Coupon present (apps) / Agent Code (leads).
 
+## Comprehensive (complete-data) model — 2026-06
+- User uploads ONE cumulative CRM file that grows each week (includes prior + new leads).
+- Report is computed over the COMPLETE uploaded file by default (no weekly summing → no double counting).
+- Optional lead date-range slicing supported via `date_range` (lead col: "User Registration Date";
+  app col: "Registration Date"), applied only when start/end supplied; empty = complete data.
+- Source files persisted in GridFS; `POST /api/reports/{id}/regenerate` re-slices without re-upload.
+- Fixed: broken `report_engine.py` (duplicate block + undefined date vars) that crashed the backend.
+
 ## Backlog / Next
 - P1: Per-program application file → program auto-detect from filename.
 - P1: shadcn calendar date picker on Generate page (currently native date input).

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
@@ -24,6 +24,7 @@ load_dotenv(ROOT_DIR / ".env")
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
+fs_bucket = AsyncIOMotorGridFSBucket(db)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -74,19 +75,20 @@ def _kpis(result: Dict[str, Any]) -> Dict[str, Any]:
 async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
                    settings: Dict[str, Any], amount_spent: Dict[str, float],
                    additional_attributed: Dict[str, float],
-                   preset_app_counts: Optional[Dict[str, Any]] = None):
+                   preset_app_counts: Optional[Dict[str, Any]] = None,
+                   date_range: Optional[Dict[str, str]] = None):
     try:
         if preset_app_counts is not None:
             app_counts = preset_app_counts
         else:
-            app_counts = await asyncio.to_thread(parse_application_files, app_files, settings) if app_files else {}
+            app_counts = await asyncio.to_thread(parse_application_files, app_files, settings, date_range) if app_files else {}
         result = await asyncio.to_thread(
-            compute_report, lead_bytes, settings, amount_spent, additional_attributed, app_counts
+            compute_report, lead_bytes, settings, amount_spent, additional_attributed, app_counts, date_range
         )
         await db.reports.update_one(
             {"id": report_id},
             {"$set": {"status": "ready", "result": result, "application_counts": app_counts,
-                      "kpis": _kpis(result), "updated_at": now_iso()}},
+                      "kpis": _kpis(result), "date_range": date_range or {}, "updated_at": now_iso()}},
         )
     except Exception as e:  # noqa
         logger.exception("report processing failed")
@@ -162,6 +164,8 @@ async def create_report(
     week_date: str = Form(...),
     amount_spent: str = Form("{}"),
     additional_attributed: str = Form("{}"),
+    lead_start_date: str = Form(""),
+    lead_end_date: str = Form(""),
     lead_file: UploadFile = File(...),
     application_files: List[UploadFile] = File(default=[]),
 ):
@@ -170,6 +174,12 @@ async def create_report(
     app_bytes = [await f.read() for f in (application_files or [])]
 
     report_id = str(uuid.uuid4())
+    # Persist raw files in GridFS so the report can be re-sliced by date later.
+    lead_fid = await fs_bucket.upload_from_stream(f"{report_id}_lead.xlsx", lead_bytes)
+    app_fids = []
+    for i, ab in enumerate(app_bytes):
+        app_fids.append(await fs_bucket.upload_from_stream(f"{report_id}_app{i}.xlsx", ab))
+    date_range = {"start": lead_start_date or None, "end": lead_end_date or None}
     doc = {
         "id": report_id,
         "week_label": week_label,
@@ -178,15 +188,48 @@ async def create_report(
         "source": "upload",
         "lead_filename": lead_file.filename,
         "application_filenames": [f.filename for f in (application_files or [])],
+        "lead_file_id": str(lead_fid),
+        "app_file_ids": [str(x) for x in app_fids],
         "amount_spent": _parse_json_form(amount_spent),
         "additional_attributed": _parse_json_form(additional_attributed),
+        "date_range": date_range,
         "settings": settings,
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
     await db.reports.insert_one(doc)
     asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
-                                 doc["amount_spent"], doc["additional_attributed"]))
+                                 doc["amount_spent"], doc["additional_attributed"],
+                                 date_range=date_range))
+    return {"id": report_id, "status": "processing"}
+
+
+class RegenerateIn(BaseModel):
+    start: Optional[str] = None
+    end: Optional[str] = None
+
+
+async def _read_gridfs(file_id: str) -> bytes:
+    from bson import ObjectId
+    stream = await fs_bucket.open_download_stream(ObjectId(file_id))
+    return await stream.read()
+
+
+@api_router.post("/reports/{report_id}/regenerate")
+async def regenerate_report(report_id: str, payload: RegenerateIn):
+    doc = await db.reports.find_one({"id": report_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Report not found")
+    if not doc.get("lead_file_id"):
+        raise HTTPException(400, "This report has no stored source file (e.g. sample). Re-upload to slice by date.")
+    settings = doc.get("settings") or await get_settings()
+    lead_bytes = await _read_gridfs(doc["lead_file_id"])
+    app_bytes = [await _read_gridfs(fid) for fid in doc.get("app_file_ids", [])]
+    date_range = {"start": payload.start or None, "end": payload.end or None}
+    await db.reports.update_one({"id": report_id}, {"$set": {"status": "processing", "updated_at": now_iso()}})
+    asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
+                                 doc.get("amount_spent", {}), doc.get("additional_attributed", {}),
+                                 date_range=date_range))
     return {"id": report_id, "status": "processing"}
 
 

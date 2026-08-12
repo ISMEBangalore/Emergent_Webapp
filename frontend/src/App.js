@@ -9,6 +9,7 @@ import History from "@/pages/History";
 import Settings from "@/pages/Settings";
 import ComparePage from "@/pages/ComparePage";
 import CumulativeView from "@/pages/CumulativeView";
+import Latest from "@/pages/Latest";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
             <Route path="/history" element={<History />} />
             <Route path="/compare" element={<ComparePage />} />
             <Route path="/cumulative" element={<CumulativeView />} />
+            <Route path="/latest" element={<Latest />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Layout>

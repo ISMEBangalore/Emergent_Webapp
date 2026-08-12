@@ -50,6 +50,11 @@ ORIGIN_CANDIDATES = [
 WIDGET_CANDIDATES = ["Widget Name"]
 PAYMENT_CANDIDATES = ["Payment Approved"]
 PUBLISHER_CANDIDATES = ["Publisher Name", "Publisher", "Publisher(Primary)"]
+DATE_CANDIDATES = [
+    "User Registration Date", "Registration Date", "Created On", "Lead Created Date",
+    "Lead Creation Date", "Created Date", "Creation Date", "Lead Created On", "Created",
+    "Enquiry Date", "Date Created", "Lead Date",
+]
 
 
 def _norm(s: Any) -> str:
@@ -109,6 +114,7 @@ def compute_report(
     amount_spent: Optional[Dict[str, float]] = None,
     additional_attributed: Optional[Dict[str, float]] = None,
     application_counts: Optional[Dict[str, Dict[str, int]]] = None,
+    date_range: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     cfg = {**DEFAULT_SETTINGS, **(settings or {})}
     programs: List[str] = cfg["programs"]
@@ -142,6 +148,29 @@ def compute_report(
         test_excluded = int(is_test.sum())
         if test_excluded:
             df = df[~is_test].reset_index(drop=True)
+
+    # ---- Lead creation date coverage + optional range filter ----
+    date_range = date_range or {}
+    d_start = (str(date_range.get("start") or "")).strip() or None
+    d_end = (str(date_range.get("end") or "")).strip() or None
+    col_date = _find_col(df, DATE_CANDIDATES, prefer_data=True)
+    date_min = date_max = None
+    rows_before_date = len(df)
+    date_filtered = 0
+    if col_date is not None:
+        parsed = pd.to_datetime(df[col_date], errors="coerce", dayfirst=True)
+        if parsed.notna().any():
+            date_min = parsed.min().strftime("%Y-%m-%d")
+            date_max = parsed.max().strftime("%Y-%m-%d")
+        if d_start or d_end:
+            keep = pd.Series(True, index=df.index)
+            if d_start:
+                keep &= parsed >= pd.Timestamp(d_start)
+            if d_end:
+                keep &= parsed < (pd.Timestamp(d_end) + pd.Timedelta(days=1))
+            keep = keep.fillna(False)
+            date_filtered = int((~keep).sum())
+            df = df[keep].reset_index(drop=True)
     n = len(df)
 
     col_prog = _find_col(df, PROGRAM_CANDIDATES, prefer_data=True)
@@ -301,6 +330,9 @@ def compute_report(
             "total_rows": n, "unclassified_program": unclassified,
             "program_column_present": bool(col_prog), "stage_column_present": bool(col_stage),
             "test_leads_excluded": test_excluded, "raw_rows": raw_n,
+            "date_column": col_date, "data_date_min": date_min, "data_date_max": date_max,
+            "date_filtered_out": date_filtered, "rows_before_date_filter": rows_before_date,
+            "date_range": {"start": d_start or None, "end": d_end or None},
         },
     )
     result["publisher_report"] = publisher_result

@@ -6,7 +6,7 @@ const nav = [
   { to: "/", label: "Dashboard", icon: ChartBar, testid: "nav-dashboard" },
   { to: "/generate", label: "Generate Report", icon: UploadSimple, testid: "nav-generate" },
   { to: "/compare", label: "Week Compare", icon: ArrowsDownUp, testid: "nav-compare" },
-  { to: "/cumulative", label: "Report Till Date", icon: ChartLineUp, testid: "nav-cumulative" },
+  { to: "/latest", label: "Report Till Date", icon: ChartLineUp, testid: "nav-cumulative" },
   { to: "/history", label: "History", icon: ClockCounterClockwise, testid: "nav-history" },
   { to: "/settings", label: "Settings", icon: GearSix, testid: "nav-settings" },
 ];

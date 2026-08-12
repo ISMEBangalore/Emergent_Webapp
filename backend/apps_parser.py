@@ -19,13 +19,21 @@ CODE_CANDS = [
     "Referral Coupon", "Code", "Voucher Code", "Voucher", "Scholarship Code",
 ]
 BLANK_TOKENS = {"", "NA", "N/A", "NAN", "NONE", "NULL", "0", "-", "NO", "NIL"}
+APP_DATE_CANDS = [
+    "Registration Date", "User Registration Date", "Created On", "Application Date",
+    "Created Date", "Payment Date", "Date",
+]
 
 
-def parse_application_files(files: List[bytes], settings: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
+def parse_application_files(files: List[bytes], settings: Dict[str, Any],
+                            date_range: Dict[str, Any] = None) -> Dict[str, Dict[str, int]]:
     programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
     api_pat = [p.upper() for p in settings.get("api_patterns", ["API"])]
     redir_pat = [p.upper() for p in settings.get("redirect_patterns", ["REDIRECT", "PUSH", "WIDGET"])]
     code_field = settings.get("application_code_field_apps")
+    date_range = date_range or {}
+    d_start = (str(date_range.get("start") or "")).strip() or None
+    d_end = (str(date_range.get("end") or "")).strip() or None
 
     counts = {p: {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0} for p in programs}
 
@@ -36,6 +44,18 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any]) -> Dic
             continue
         if len(df) == 0:
             continue
+        if d_start or d_end:
+            col_date = _find_col(df, APP_DATE_CANDS, prefer_data=True)
+            if col_date is not None:
+                parsed = pd.to_datetime(df[col_date], errors="coerce", dayfirst=True)
+                keep = pd.Series(True, index=df.index)
+                if d_start:
+                    keep &= parsed >= pd.Timestamp(d_start)
+                if d_end:
+                    keep &= parsed < (pd.Timestamp(d_end) + pd.Timedelta(days=1))
+                df = df[keep.fillna(False)].reset_index(drop=True)
+                if len(df) == 0:
+                    continue
         col_prog = _find_col(df, PROG_CANDS, prefer_data=True)
         col_origin = _find_col(df, ORIGIN_CANDS, prefer_data=True)
         cands = ([code_field] if code_field else []) + CODE_CANDS
