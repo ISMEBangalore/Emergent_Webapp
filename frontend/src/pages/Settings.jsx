@@ -28,6 +28,8 @@ export default function Settings() {
         redirect_patterns: s.redirect_patterns,
         application_code_field: s.application_code_field,
         application_code_field_apps: s.application_code_field_apps,
+        exclude_test_leads: s.exclude_test_leads,
+        test_keywords: s.test_keywords,
       };
       await api.updateSettings(payload);
       toast.success("Settings saved — applied to new reports");
@@ -75,6 +77,26 @@ export default function Settings() {
         {listField("Relevant lead stages", "relevant_stages", "Raw CRM stages counted as 'Relevant Leads'.")}
         {listField("API lead patterns", "api_patterns", "Lead Origin text patterns that mark a lead as API-sourced.")}
         {listField("Redirect lead patterns", "redirect_patterns", "Lead Origin text patterns that mark a lead as redirect-sourced.")}
+
+        <div className="border-t border-slate-100 pt-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-semibold text-slate-700">Exclude TEST leads</Label>
+              <p className="text-xs text-slate-400 mt-0.5">Drop leads whose name/remark/email contains a test keyword (also the "TEST LEADS" stage).</p>
+            </div>
+            <button type="button" data-testid="setting-exclude-test"
+                    onClick={() => setS({ ...s, exclude_test_leads: !s.exclude_test_leads })}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${s.exclude_test_leads ? "bg-[#002FA7]" : "bg-slate-300"}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${s.exclude_test_leads ? "left-[22px]" : "left-0.5"}`} />
+            </button>
+          </div>
+          <div className="mt-3">
+            <Label className="text-xs uppercase tracking-wide text-slate-500">Test keywords</Label>
+            <Input data-testid="setting-test-keywords" value={(s.test_keywords || []).join(", ")}
+                   onChange={(e) => setS({ ...s, test_keywords: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
+                   className="mt-1" placeholder="test" />
+          </div>
+        </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
           <div>

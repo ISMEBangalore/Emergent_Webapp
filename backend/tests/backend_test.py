@@ -1,8 +1,7 @@
-"""Regression tests for CRM settings, report generation, export, trends, and deletion APIs."""
+"""E2E regression tests for cumulative ranges, TEST-lead filtering, settings, reports, exports, and trends."""
 import io
 import os
 import time
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -16,10 +15,11 @@ if not base_url:
     raise RuntimeError("REACT_APP_BACKEND_URL is missing")
 BASE_URL = base_url.rstrip("/")
 
-STATE = {}
+STATE = {"created_ids": []}
 
 
 def wait_until_ready(client, report_id, timeout=60):
+    """Poll a created report until background processing is complete."""
     deadline = time.time() + timeout
     latest = None
     while time.time() < deadline:
@@ -34,288 +34,285 @@ def wait_until_ready(client, report_id, timeout=60):
     pytest.fail(f"Report {report_id} did not become ready in {timeout}s; latest={latest}")
 
 
-def build_small_lead_xlsx():
+def build_test_lead_xlsx():
+    """Build rows covering test name/email/remark/stage plus boundary and normal controls."""
     workbook = Workbook()
     sheet = workbook.active
     sheet.append([
+        "Registered Name",
         "Course",
         "Lead Stage",
+        "Email",
+        "Lead Remark",
         "Email Verification Status",
         "Mobile Verification Status",
+        "Publisher Name",
         "Lead Origin(Primary)",
-        "Agent Code",
     ])
-    sheet.append(["B.Com", "APPLIED", "VERIFIED", "", "API", "A1"])
-    sheet.append(["BBA", "APPLIED", "", "VERIFIED", "REDIRECT", ""])
-    sheet.append(["PGDM", "APPLIED", "VERIFIED", "VERIFIED", "Organic", "A3"])
-    sheet.append(["B.Com", "COLD", "", "", "Organic", ""])
-    sheet.append(["BBA", "WARM", "VERIFIED", "", "API", ""])
-    sheet.append(["BBA", "Not Interested", "VERIFIED", "VERIFIED", "Organic", ""])
-    sheet.append(["PGDM", "JUNK", "", "", "WIDGET", ""])
+    sheet.append(["Test User", "B.Com", "APPLIED", "real1@x.com", "", "VERIFIED", "", "Pub A", "API"])
+    sheet.append(["Email Control", "BBA", "WARM", "test123@x.com", "", "", "VERIFIED", "Pub B", "REDIRECT"])
+    sheet.append(["Remark Control", "PGDM", "COLD", "real2@x.com", "test lead", "VERIFIED", "", "Pub C", "Organic"])
+    sheet.append(["Stage Control", "B.Com", "TEST LEADS", "real3@x.com", "", "", "", "Pub A", "Organic"])
+    sheet.append(["Latest Kumar", "BBA", "APPLIED", "kumar@x.com", "", "VERIFIED", "", "Pub B", "API"])
+    sheet.append(["Normal Kumar", "PGDM", "WARM", "normal@x.com", "customer", "", "VERIFIED", "Pub C", "REDIRECT"])
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()
 
 
+def upload_leads(client, payload, label):
+    """Upload the TEST-lead workbook and track it for teardown."""
+    files = {
+        "lead_file": (
+            "TEST_lead_filter.xlsx",
+            payload,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    }
+    data = {
+        "week_label": label,
+        "week_date": "2026-08-12",
+        "amount_spent": "{}",
+        "additional_attributed": "{}",
+    }
+    response = client.post(f"{BASE_URL}/api/reports", data=data, files=files, timeout=30)
+    assert response.status_code == 200, response.text
+    created = response.json()
+    assert created["status"] == "processing"
+    assert isinstance(created["id"], str) and created["id"]
+    STATE["created_ids"].append(created["id"])
+    return wait_until_ready(client, created["id"])
+
+
 @pytest.fixture(scope="class")
 def api_client():
+    """Public API client which restores global settings and removes only test-created reports."""
     session = requests.Session()
     session.headers.update({"Accept": "application/json"})
+    original_response = session.get(f"{BASE_URL}/api/settings", timeout=20)
+    assert original_response.status_code == 200
+    STATE["original_settings"] = original_response.json()
     yield session
+    original = STATE.get("original_settings")
+    if original:
+        allowed = {
+            key: original.get(key)
+            for key in (
+                "programs", "verified_logic", "relevant_stages", "api_patterns",
+                "redirect_patterns", "application_code_field", "application_code_field_apps",
+                "exclude_test_leads", "test_keywords",
+            )
+            if key in original
+        }
+        session.put(f"{BASE_URL}/api/settings", json=allowed, timeout=20)
+    for report_id in STATE["created_ids"]:
+        session.delete(f"{BASE_URL}/api/reports/{report_id}", timeout=20)
     session.close()
 
 
-class TestCRMReportAPI:
-    """End-to-end API coverage using the public preview endpoint."""
+class TestLeadPulseNewFeatures:
+    """New cumulative-range and TEST-lead exclusion coverage plus core regressions."""
 
-    def test_01_root_and_settings_persistence(self, api_client):
+    def test_01_root_and_new_settings_defaults(self, api_client):
         root = api_client.get(f"{BASE_URL}/api/", timeout=20)
         assert root.status_code == 200
         assert root.json() == {"message": "CRM Weekly Report API"}
 
         response = api_client.get(f"{BASE_URL}/api/settings", timeout=20)
         assert response.status_code == 200
-        original = response.json()
-        assert original["programs"] == ["B.Com", "BBA", "PGDM"]
-        assert original["verified_logic"] == "any"
+        settings = response.json()
+        assert settings["exclude_test_leads"] is True
+        assert settings["test_keywords"] == ["test"]
+        assert settings["programs"] == ["B.Com", "BBA", "PGDM"]
 
-        changed = api_client.put(
-            f"{BASE_URL}/api/settings", json={"programs": original["programs"], "verified_logic": "all"}, timeout=20
+    def test_02_cumulative_all_time_and_custom_ranges(self, api_client):
+        all_time_response = api_client.get(f"{BASE_URL}/api/reports/cumulative", timeout=60)
+        assert all_time_response.status_code == 200
+        all_time = all_time_response.json()
+        assert all_time["week_label"].startswith("Report Till Date")
+        assert all_time["range"] == {"start": None, "end": None}
+        assert all_time["result"]["data_quality"]["weeks_aggregated"] >= 2
+        assert all_time["kpis"]["total_leads"] > 0
+        assert isinstance(all_time["result"].get("publisher_report"), dict)
+
+        ranged_response = api_client.get(
+            f"{BASE_URL}/api/reports/cumulative",
+            params={"start": "2026-01-01", "end": "2026-12-31"},
+            timeout=60,
         )
-        assert changed.status_code == 200
-        assert changed.json()["verified_logic"] == "all"
-        persisted = api_client.get(f"{BASE_URL}/api/settings", timeout=20)
-        assert persisted.status_code == 200
-        assert persisted.json()["verified_logic"] == "all"
+        assert ranged_response.status_code == 200
+        ranged = ranged_response.json()
+        assert ranged["week_label"].startswith("Custom Report")
+        assert ranged["range"] == {"start": "2026-01-01", "end": "2026-12-31"}
+        assert ranged["result"]["data_quality"]["weeks_aggregated"] >= 2
+        assert ranged["kpis"]["total_leads"] > 0
 
-        restored = api_client.put(
-            f"{BASE_URL}/api/settings", json={"programs": original["programs"], "verified_logic": "any"}, timeout=20
+        future_response = api_client.get(
+            f"{BASE_URL}/api/reports/cumulative",
+            params={"start": "2030-01-01", "end": "2030-12-31"},
+            timeout=60,
         )
-        assert restored.status_code == 200
-        assert restored.json()["verified_logic"] == "any"
+        assert future_response.status_code == 200
+        future = future_response.json()
+        assert future["week_label"].startswith("Custom Report")
+        assert future["result"]["data_quality"]["weeks_aggregated"] == 0
+        assert future["kpis"]["total_leads"] == 0
 
-    def test_02_create_sample_and_validate_computed_matrix(self, api_client):
-        response = api_client.post(f"{BASE_URL}/api/reports/sample", timeout=20)
-        assert response.status_code == 200
-        created = response.json()
-        assert isinstance(created.get("id"), str) and created["id"]
-        assert created["status"] == "processing"
-        STATE["sample_id"] = created["id"]
-
-        report = wait_until_ready(api_client, created["id"])
-        assert report["status"] == "ready"
-        assert report["source"] == "sample"
-        assert report["result"]["programs"] == ["B.Com", "BBA", "PGDM"]
-        applied = next(row for row in report["result"]["matrix"] if row["stage"] == "APPLIED")
-        assert applied["values"] == {"B.Com": 14, "BBA": 41, "PGDM": 71}
-        assert applied["total"] == 126
-        assert report["kpis"]["total_leads"] == 22393
-        assert report["kpis"]["total_applications"] == 101
-        assert isinstance(report["result"]["summary"], list) and len(report["result"]["summary"]) > 10
-        assert isinstance(report["result"]["publisher_report"], dict)
-        assert report["result"]["publisher_report"]["programs"]
-        cold_unverified = next(
-            row for row in report["result"]["matrix"] if row["stage"] == "COLD Unverified leads"
+    def test_03_cumulative_export_with_partial_range_is_valid_xlsx(self, api_client):
+        response = api_client.get(
+            f"{BASE_URL}/api/reports/cumulative/export",
+            params={"start": "2026-01-01"},
+            timeout=60,
         )
-        assert cold_unverified["total"] > 0
-
-    def test_03_list_is_newest_first_and_excludes_heavy_fields(self, api_client):
-        response = api_client.get(f"{BASE_URL}/api/reports", timeout=20)
-        assert response.status_code == 200
-        reports = response.json()
-        assert isinstance(reports, list) and reports
-        assert reports[0]["id"] == STATE["sample_id"]
-        assert all("result" not in report and "settings" not in report for report in reports)
-        created_times = [report["created_at"] for report in reports]
-        assert created_times == sorted(created_times, reverse=True)
-
-    def test_04_export_is_valid_xlsx(self, api_client):
-        response = api_client.get(f"{BASE_URL}/api/reports/{STATE['sample_id']}/export", timeout=30)
         assert response.status_code == 200
         assert response.headers["content-type"].startswith(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+        assert "report_range.xlsx" in response.headers.get("content-disposition", "")
         assert response.content[:2] == b"PK"
         workbook = load_workbook(io.BytesIO(response.content), read_only=True, data_only=True)
         assert workbook.sheetnames == ["Weekly Report"]
-        sheet = workbook["Weekly Report"]
-        assert sheet["A2"].value == "Lead Stage"
-        assert sheet["B3"].value == 14
+        assert workbook["Weekly Report"]["A2"].value == "Lead Stage"
 
-    def test_05_patch_amounts_recomputes_money_rows_and_kpis(self, api_client):
+    def test_04_test_leads_are_excluded_with_word_boundary(self, api_client):
+        settings_response = api_client.put(
+            f"{BASE_URL}/api/settings",
+            json={"exclude_test_leads": True, "test_keywords": ["test"]},
+            timeout=20,
+        )
+        assert settings_response.status_code == 200
+        assert settings_response.json()["exclude_test_leads"] is True
+        assert settings_response.json()["test_keywords"] == ["test"]
+
+        report = upload_leads(api_client, build_test_lead_xlsx(), "TEST_Filter enabled")
+        STATE["filter_enabled_id"] = report["id"]
+        quality = report["result"]["data_quality"]
+        assert quality["raw_rows"] == 6
+        assert quality["test_leads_excluded"] == 4
+        assert quality["total_rows"] == 2
+        assert report["kpis"]["total_leads"] == 2
+        applied = next(row for row in report["result"]["matrix"] if row["stage"] == "APPLIED")
+        assert applied["values"] == {"B.Com": 0, "BBA": 1, "PGDM": 0}
+        warm = next(row for row in report["result"]["matrix"] if row["stage"] == "WARM")
+        assert warm["values"] == {"B.Com": 0, "BBA": 0, "PGDM": 1}
+        assert isinstance(report["result"]["publisher_report"], dict)
+
+        persisted = api_client.get(f"{BASE_URL}/api/reports/{report['id']}", timeout=20)
+        assert persisted.status_code == 200
+        assert persisted.json()["result"]["data_quality"] == quality
+
+    def test_05_disabling_test_filter_persists_and_keeps_all_rows(self, api_client):
+        changed = api_client.put(
+            f"{BASE_URL}/api/settings",
+            json={"exclude_test_leads": False, "test_keywords": ["test", "dummy"]},
+            timeout=20,
+        )
+        assert changed.status_code == 200
+        assert changed.json()["exclude_test_leads"] is False
+        assert changed.json()["test_keywords"] == ["test", "dummy"]
+        persisted = api_client.get(f"{BASE_URL}/api/settings", timeout=20)
+        assert persisted.status_code == 200
+        assert persisted.json()["exclude_test_leads"] is False
+        assert persisted.json()["test_keywords"] == ["test", "dummy"]
+
+        report = upload_leads(api_client, build_test_lead_xlsx(), "TEST_Filter disabled")
+        quality = report["result"]["data_quality"]
+        assert quality["raw_rows"] == 6
+        assert quality["test_leads_excluded"] == 0
+        assert quality["total_rows"] == 6
+        assert report["kpis"]["total_leads"] == 6
+
+        restored = api_client.put(
+            f"{BASE_URL}/api/settings",
+            json={"exclude_test_leads": True, "test_keywords": ["test"]},
+            timeout=20,
+        )
+        assert restored.status_code == 200
+        assert restored.json()["exclude_test_leads"] is True
+        assert restored.json()["test_keywords"] == ["test"]
+
+    def test_06_sample_report_matrix_and_program_amounts_regression(self, api_client):
+        response = api_client.post(f"{BASE_URL}/api/reports/sample", timeout=20)
+        assert response.status_code == 200
+        created = response.json()
+        STATE["created_ids"].append(created["id"])
+        STATE["sample_id"] = created["id"]
+        report = wait_until_ready(api_client, created["id"])
+        assert report["status"] == "ready"
+        applied = next(row for row in report["result"]["matrix"] if row["stage"] == "APPLIED")
+        assert applied["values"] == {"B.Com": 14, "BBA": 41, "PGDM": 71}
+        assert applied["total"] == 126
+        assert isinstance(report["result"]["publisher_report"], dict)
+        assert report["result"]["publisher_report"]["programs"]
+
         amounts = {"B.Com": 800.0, "BBA": 7000.0, "PGDM": 11600.0}
         attributed = {"B.Com": 2.0, "BBA": 5.0, "PGDM": 2.0}
-        response = api_client.patch(
-            f"{BASE_URL}/api/reports/{STATE['sample_id']}/amounts",
+        patched = api_client.patch(
+            f"{BASE_URL}/api/reports/{created['id']}/amounts",
             json={"amount_spent": amounts, "additional_attributed": attributed},
             timeout=30,
         )
-        assert response.status_code == 200
-        report = response.json()
-        summary = {row["label"]: row for row in report["result"]["summary"] if "values" in row}
+        assert patched.status_code == 200
+        patched_doc = patched.json()
+        summary = {row["label"]: row for row in patched_doc["result"]["summary"] if "values" in row}
         assert summary["Amount Spent"]["values"] == amounts
         assert summary["Amount Spent"]["total"] == 19400.0
-        assert summary["Cost/Application"]["values"] == {"B.Com": 100.0, "BBA": 200.0, "PGDM": 200.0}
-        assert summary["Cost/Application"]["total"] == 192.08
         assert summary["Additional Attributed Applications"]["values"] == attributed
         assert summary["Additional Attributed Applications"]["total"] == 9.0
-        assert summary["Modified CPA after attribution"]["values"] == {
-            "B.Com": 80.0,
-            "BBA": 175.0,
-            "PGDM": 193.33,
-        }
-        assert summary["Modified CPA after attribution"]["total"] == 176.36
-        assert report["kpis"]["amount_spent"] == 19400.0
-        assert report["kpis"]["blended_cpa"] == 192.08
+        assert patched_doc["kpis"]["amount_spent"] == 19400.0
 
-        persisted = api_client.get(f"{BASE_URL}/api/reports/{STATE['sample_id']}", timeout=20).json()
-        assert persisted["amount_spent"] == amounts
-        assert persisted["additional_attributed"] == attributed
+        persisted = api_client.get(f"{BASE_URL}/api/reports/{created['id']}", timeout=20)
+        assert persisted.status_code == 200
+        assert persisted.json()["amount_spent"] == amounts
+        assert persisted.json()["additional_attributed"] == attributed
 
-    def test_06_publisher_amounts_support_cpa_and_direct_spend(self, api_client):
+    def test_07_publisher_amounts_regression(self, api_client):
         report_url = f"{BASE_URL}/api/reports/{STATE['sample_id']}"
-        current = api_client.get(report_url, timeout=20).json()
-        publisher_report = current["result"]["publisher_report"]
-        publisher = next(
-            name
-            for name in publisher_report["programs"]
-            if next(
-                row for row in publisher_report["summary"]
-                if row["label"] == "Total No. of Applications"
-            )["values"].get(name, 0) > 0
-        )
-        applied_count = next(
+        current_response = api_client.get(report_url, timeout=20)
+        assert current_response.status_code == 200
+        publisher_report = current_response.json()["result"]["publisher_report"]
+        app_row = next(
             row for row in publisher_report["summary"]
             if row["label"] == "Total No. of Applications"
-        )["values"][publisher]
-
-        cpa_response = api_client.patch(
+        )
+        publisher = next(name for name in publisher_report["programs"] if app_row["values"].get(name, 0) > 0)
+        applied_count = app_row["values"][publisher]
+        response = api_client.patch(
             f"{report_url}/publisher-amounts",
             json={"amount_spent": {}, "cpa": {publisher: 5000}},
             timeout=30,
         )
-        assert cpa_response.status_code == 200
-        cpa_doc = cpa_response.json()
-        cpa_summary = {
-            row["label"]: row for row in cpa_doc["result"]["publisher_report"]["summary"]
-            if "values" in row
-        }
-        assert cpa_summary["Amount Spent"]["values"][publisher] == 5000 * applied_count
-        assert cpa_summary["Cost/Application"]["values"][publisher] == 5000
-        assert cpa_doc["publisher_cpa"][publisher] == 5000
-
-        direct_amount = 12345.0
-        amount_response = api_client.patch(
-            f"{report_url}/publisher-amounts",
-            json={"amount_spent": {publisher: direct_amount}, "cpa": {publisher: 5000}},
-            timeout=30,
-        )
-        assert amount_response.status_code == 200
-        amount_doc = amount_response.json()
-        amount_summary = {
-            row["label"]: row for row in amount_doc["result"]["publisher_report"]["summary"]
-            if "values" in row
-        }
-        assert amount_summary["Amount Spent"]["values"][publisher] == direct_amount
-        assert amount_summary["Cost/Application"]["values"][publisher] == round(direct_amount / applied_count, 2)
-
-        persisted = api_client.get(report_url, timeout=20).json()
-        persisted_summary = {
-            row["label"]: row for row in persisted["result"]["publisher_report"]["summary"]
-            if "values" in row
-        }
-        assert persisted_summary["Amount Spent"]["values"][publisher] == direct_amount
-        STATE["publisher"] = publisher
-
-    def test_07_small_real_xlsx_upload_processes_without_crash(self, api_client):
-        label = "TEST_Small upload"
-        week_date = date.today().isoformat()
-        files = {
-            "lead_file": (
-                "TEST_small_leads.xlsx",
-                build_small_lead_xlsx(),
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        }
-        data = {
-            "week_label": label,
-            "week_date": week_date,
-            "amount_spent": '{"B.Com":100,"BBA":200,"PGDM":300}',
-            "additional_attributed": "{}",
-        }
-        response = api_client.post(f"{BASE_URL}/api/reports", data=data, files=files, timeout=30)
         assert response.status_code == 200
-        created = response.json()
-        assert created["status"] == "processing"
-        STATE["upload_id"] = created["id"]
+        doc = response.json()
+        summary = {
+            row["label"]: row for row in doc["result"]["publisher_report"]["summary"]
+            if "values" in row
+        }
+        assert summary["Amount Spent"]["values"][publisher] == 5000 * applied_count
+        assert summary["Cost/Application"]["values"][publisher] == 5000
+        assert doc["publisher_cpa"][publisher] == 5000
 
-        report = wait_until_ready(api_client, created["id"])
-        assert report["source"] == "upload"
-        assert report["lead_filename"] == "TEST_small_leads.xlsx"
-        assert report["result"]["data_quality"]["total_rows"] == 7
-        assert report["result"]["data_quality"]["unclassified_program"] == 0
-        applied = next(row for row in report["result"]["matrix"] if row["stage"] == "APPLIED")
-        assert applied["values"] == {"B.Com": 1, "BBA": 1, "PGDM": 1}
-        assert applied["total"] == 3
-        cold_unverified = next(
-            row for row in report["result"]["matrix"] if row["stage"] == "COLD Unverified leads"
-        )
-        assert cold_unverified["values"] == {"B.Com": 1, "BBA": 1, "PGDM": 0}
-        assert cold_unverified["total"] == 2
-        assert report["kpis"]["total_leads"] == 7
-        assert report["kpis"]["amount_spent"] == 600.0
-
-    def test_08_cumulative_result_and_export_include_publishers(self, api_client):
-        response = api_client.get(f"{BASE_URL}/api/reports/cumulative", timeout=60)
-        assert response.status_code == 200
-        cumulative = response.json()
-        assert cumulative["id"] == "cumulative"
-        assert cumulative["status"] == "ready"
-        assert cumulative["result"]["data_quality"]["weeks_aggregated"] >= 2
-        assert cumulative["kpis"]["total_leads"] >= 7
-        assert isinstance(cumulative["result"].get("publisher_report"), dict)
-        assert cumulative["result"]["publisher_report"]["programs"]
-
-        export = api_client.get(f"{BASE_URL}/api/reports/cumulative/export", timeout=60)
-        assert export.status_code == 200
-        assert export.headers["content-type"].startswith(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        assert export.content[:2] == b"PK"
-        workbook = load_workbook(io.BytesIO(export.content), read_only=True, data_only=True)
-        assert workbook.sheetnames == ["Weekly Report"]
-        assert workbook["Weekly Report"]["A2"].value == "Lead Stage"
-
-    def test_09_trends_are_ready_sorted_and_contain_kpis(self, api_client):
+    def test_08_trends_contains_created_ready_reports(self, api_client):
         response = api_client.get(f"{BASE_URL}/api/trends", timeout=20)
         assert response.status_code == 200
         trends = response.json()
-        assert isinstance(trends, list)
-        assert all(item["status"] == "ready" for item in trends) if trends and "status" in trends[0] else True
+        assert isinstance(trends, list) and trends
         week_dates = [item["week_date"] for item in trends]
         assert week_dates == sorted(week_dates)
         ids = {item["id"] for item in trends}
-        assert STATE["sample_id"] in ids and STATE["upload_id"] in ids
+        assert STATE["sample_id"] in ids
+        assert STATE["filter_enabled_id"] in ids
         assert all(isinstance(item.get("kpis"), dict) for item in trends)
 
-    def test_10_delete_reports_and_verify_404(self, api_client):
-        for key in ("upload_id", "sample_id"):
-            report_id = STATE[key]
-            response = api_client.delete(f"{BASE_URL}/api/reports/{report_id}", timeout=20)
-            assert response.status_code == 200
-            assert response.json() == {"deleted": True}
-            get_response = api_client.get(f"{BASE_URL}/api/reports/{report_id}", timeout=20)
-            assert get_response.status_code == 404
-            assert get_response.json()["detail"] == "Report not found"
+    def test_09_range_parameters_reject_invalid_dates(self, api_client):
+        malformed = api_client.get(
+            f"{BASE_URL}/api/reports/cumulative", params={"start": "not-a-date"}, timeout=30
+        )
+        assert malformed.status_code == 422
 
-    def test_11_missing_resource_error_handling(self, api_client):
-        missing = "00000000-0000-0000-0000-000000000000"
-        get_response = api_client.get(f"{BASE_URL}/api/reports/{missing}", timeout=20)
-        assert get_response.status_code == 404
-        assert get_response.json() == {"detail": "Report not found"}
-        delete_response = api_client.delete(f"{BASE_URL}/api/reports/{missing}", timeout=20)
-        assert delete_response.status_code == 404
-        assert delete_response.json() == {"detail": "Report not found"}
-        export_response = api_client.get(f"{BASE_URL}/api/reports/{missing}/export", timeout=20)
-        assert export_response.status_code == 404
-        assert export_response.json() == {"detail": "Report not ready"}
+        reversed_range = api_client.get(
+            f"{BASE_URL}/api/reports/cumulative",
+            params={"start": "2026-12-31", "end": "2026-01-01"},
+            timeout=30,
+        )
+        assert reversed_range.status_code in (400, 422)

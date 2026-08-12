@@ -17,7 +17,10 @@ export const api = {
   updateAmounts: (id, body) => client.patch(`/reports/${id}/amounts`, body).then((r) => r.data),
   updatePublisherAmounts: (id, body) => client.patch(`/reports/${id}/publisher-amounts`, body).then((r) => r.data),
   trends: () => client.get("/trends").then((r) => r.data),
-  getCumulative: () => client.get("/reports/cumulative").then((r) => r.data),
-  cumulativeExportUrl: () => `${API}/reports/cumulative/export`,
+  getCumulative: (params) => client.get("/reports/cumulative", { params }).then((r) => r.data),
+  cumulativeExportUrl: (params) => {
+    const q = new URLSearchParams(Object.entries(params || {}).filter(([, v]) => v)).toString();
+    return `${API}/reports/cumulative/export${q ? `?${q}` : ""}`;
+  },
   exportUrl: (id) => `${API}/reports/${id}/export`,
 };

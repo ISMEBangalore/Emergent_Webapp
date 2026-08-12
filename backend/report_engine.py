@@ -33,6 +33,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "api_patterns": ["API"],
     "redirect_patterns": ["REDIRECT", "PUSH", "WIDGET"],
     "application_code_field": "Agent Code",
+    "exclude_test_leads": True,
+    "test_keywords": ["test"],
 }
 
 PROGRAM_CANDIDATES = ["Course", "Programme", "Program", "Form Interested In"]
@@ -98,6 +100,30 @@ def compute_report(
     application_counts = application_counts or {}
 
     df = pd.read_excel(io.BytesIO(lead_bytes), engine="openpyxl")
+    raw_n = len(df)
+
+    # ---- Exclude TEST leads (by name / remark / email / stage) ----
+    test_excluded = 0
+    if cfg.get("exclude_test_leads", True):
+        kws = [str(k).lower().strip() for k in cfg.get("test_keywords", ["test"]) if str(k).strip()]
+        is_test = pd.Series(False, index=df.index)
+        name_col = _find_col(df, ["Registered Name", "Name", "First Name"])
+        rem_col = _find_col(df, ["Lead Remark", "Remark", "Remarks"])
+        email_col = _find_col(df, ["Email", "Email Id", "Email Address"])
+        stage_col_tmp = _find_col(df, STAGE_CANDIDATES, prefer_data=True)
+        for kw in kws:
+            word_pat = r"\b" + re.escape(kw) + r"\b"
+            if name_col:
+                is_test |= df[name_col].astype("string").str.contains(word_pat, case=False, na=False, regex=True)
+            if rem_col:
+                is_test |= df[rem_col].astype("string").str.contains(word_pat, case=False, na=False, regex=True)
+            if email_col:
+                is_test |= df[email_col].astype("string").str.contains(kw, case=False, na=False, regex=False)
+        if stage_col_tmp:
+            is_test |= df[stage_col_tmp].astype("string").str.strip().str.upper().eq("TEST LEADS").fillna(False)
+        test_excluded = int(is_test.sum())
+        if test_excluded:
+            df = df[~is_test].reset_index(drop=True)
     n = len(df)
 
     col_prog = _find_col(df, PROGRAM_CANDIDATES, prefer_data=True)
@@ -238,6 +264,7 @@ def compute_report(
         data_quality={
             "total_rows": n, "unclassified_program": unclassified,
             "program_column_present": bool(col_prog), "stage_column_present": bool(col_stage),
+            "test_leads_excluded": test_excluded, "raw_rows": raw_n,
         },
     )
     result["publisher_report"] = publisher_result

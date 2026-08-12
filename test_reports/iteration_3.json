@@ -1,0 +1,53 @@
+{
+  "summary": "Validated both new features and requested regressions through the public endpoint and browser UI. TEST-lead filtering correctly excluded name, email, remark, and TEST LEADS-stage rows while retaining Latest Kumar; disabling the setting retained all rows. Cumulative all-time/custom/future ranges, range export, sample matrix, spend patches, trends, date presets, tabs, settings persistence, Dashboard, Compare, Report, and History passed. One API input-validation edge case remains.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/reports/cumulative and /api/reports/cumulative/export",
+        "issue": "Date query parameters are unvalidated strings. start=not-a-date and a reversed range (start=2026-12-31&end=2026-01-01) both return HTTP 200 with a misleading empty Custom Report instead of a 4xx validation response. The export endpoint shares the same builder.",
+        "priority": "MEDIUM"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Report Till Date date range and Generate Report week date",
+        "issues": [
+          "Date selection uses browser-native input[type=date] controls rather than the existing shadcn calendar/date-picker pattern, giving browser-dependent UX."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Type cumulative start/end as validated ISO dates and reject malformed or start-after-end ranges with a meaningful 4xx response; apply the same validation to range export.",
+    "Replace native date inputs with the shadcn calendar/date-range picker for consistent UX.",
+    "Add catch/finally and a retryable visible error state to CumulativeView and other initial API loads so a rejected request cannot leave an indefinite loading skeleton."
+  ],
+  "critical_code_review_comments": [
+    "server.py defines _build_cumulative twice (lines 201 and 219); the first definition is dead and should be removed to prevent maintenance errors.",
+    "Cumulative start/end and uploaded report week_date are plain strings compared lexicographically. Use Pydantic date types and enforce start <= end before querying/aggregation.",
+    "CumulativeView.load sets loading true but has no try/catch/finally, so network or validation failures cause an unhandled rejection and permanent skeleton."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_3.json"
+  ],
+  "success_rate": {
+    "backend": "88.9% (8/9 pytest cases; all explicitly requested backend scenarios passed, one invalid-range edge case failed)",
+    "frontend": "100% of requested functional flows passed with no console errors or warnings"
+  },
+  "seed_data_creation": "Created two TEST-filter upload reports and one sample report during API testing; all were deleted by teardown. Global settings were changed to verify persistence and restored to exclude_test_leads=true/test_keywords=['test']. The two pre-existing ready sample reports were preserved.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Re-run backend_test.py after adding typed date/range-order validation; test_09 should pass. Functional coverage confirmed raw_rows=6, excluded=4, kept=2 when enabled and excluded=0/kept=6 when disabled. Browser E2E confirmed custom-range title/KPIs/program+publisher tabs/export URL, settings reload persistence, Compare charts/table, Report publisher panel, History, and clean console. Production yarn build compiled successfully.",
+  "rca_of_the_issue": "The cumulative endpoints declare start/end as Optional[str], and _build_cumulative compares report week_date strings directly without parsing or range-order validation. Therefore malformed and reversed inputs are treated as legitimate filters and produce empty reports with HTTP 200 rather than client errors."
+}

@@ -119,6 +119,8 @@ class SettingsIn(BaseModel):
     redirect_patterns: Optional[List[str]] = None
     application_code_field: Optional[str] = None
     application_code_field_apps: Optional[str] = None
+    exclude_test_leads: Optional[bool] = None
+    test_keywords: Optional[List[str]] = None
 
 
 @api_router.get("/settings")
@@ -196,18 +198,48 @@ async def list_reports():
     return await cursor.to_list(500)
 
 
-async def _build_cumulative():
+def _validate_date(value: Optional[str], field: str) -> Optional[str]:
+    if value is None or value == "":
+        return None
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, f"Invalid {field} date '{value}'. Use YYYY-MM-DD.")
+    return value
+
+
+async def _build_cumulative(start: Optional[str] = None, end: Optional[str] = None):
+    start = _validate_date(start, "start")
+    end = _validate_date(end, "end")
+    if start and end and start > end:
+        raise HTTPException(400, "start date must be on or before end date.")
     settings = await get_settings()
-    reports = await db.reports.find({"status": "ready"}, {"_id": 0}).to_list(1000)
+    reports = await db.reports.find({"status": "ready"}, {"_id": 0}).to_list(2000)
+
+    def in_range(r):
+        wd = r.get("week_date") or ""
+        if start and wd < start:
+            return False
+        if end and wd > end:
+            return False
+        return True
+
+    reports = [r for r in reports if in_range(r)]
     result = await asyncio.to_thread(aggregate_reports, reports, settings)
     weeks = result.get("data_quality", {}).get("weeks_aggregated", 0)
+    if start or end:
+        rng = f"{start or 'start'} to {end or 'today'}"
+        label = f"Custom Report — {rng} ({weeks} week{'s' if weeks != 1 else ''})"
+    else:
+        label = f"Report Till Date ({weeks} week{'s' if weeks != 1 else ''})"
     doc = {
         "id": "cumulative",
-        "week_label": f"Report Till Date ({weeks} week{'s' if weeks != 1 else ''})",
+        "week_label": label,
         "week_date": now_iso()[:10],
         "status": "ready",
         "source": "cumulative",
         "lead_filename": f"{weeks} reports aggregated",
+        "range": {"start": start, "end": end},
         "result": result,
         "kpis": _kpis(result),
     }
@@ -215,18 +247,18 @@ async def _build_cumulative():
 
 
 @api_router.get("/reports/cumulative")
-async def cumulative_report():
-    return await _build_cumulative()
+async def cumulative_report(start: Optional[str] = None, end: Optional[str] = None):
+    return await _build_cumulative(start, end)
 
 
 @api_router.get("/reports/cumulative/export")
-async def export_cumulative():
-    doc = await _build_cumulative()
+async def export_cumulative(start: Optional[str] = None, end: Optional[str] = None):
+    doc = await _build_cumulative(start, end)
     data = await asyncio.to_thread(build_workbook, doc)
     return StreamingResponse(
         iter([data]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="report_till_date.xlsx"'},
+        headers={"Content-Disposition": 'attachment; filename="report_range.xlsx"'},
     )
 
 
