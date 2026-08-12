@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { StatusBadge } from "@/pages/Dashboard";
@@ -16,13 +16,13 @@ export default function History() {
   const [trends, setTrends] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setReports(await api.listReports());
     setTrends(await api.trends());
     setLoading(false);
-  };
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   const del = async (id, e) => {
     e.stopPropagation();

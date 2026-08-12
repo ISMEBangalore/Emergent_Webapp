@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { KpiCards } from "@/components/KpiCards";
@@ -18,7 +18,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [sampling, setSampling] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const list = await api.listReports();
     setReports(list);
@@ -26,8 +26,8 @@ export default function Dashboard() {
     if (ready) setLatest(await api.getReport(ready.id));
     setTrends(await api.trends());
     setLoading(false);
-  };
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   const runSample = async () => {
     setSampling(true);
