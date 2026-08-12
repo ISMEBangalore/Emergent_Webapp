@@ -275,6 +275,26 @@ def compute_report(
     )
     result["publisher_report"] = publisher_result
     result["publisher_reports"] = publisher_reports
+
+    # Program breakdown per publisher (columns = programs, one report per publisher)
+    def make_program_result(frame):
+        (t, ver, rd, rdv, ap, apv, rel, mc) = agg(frame, "prog", all_cols)
+        applied = mc.get("APPLIED", {})
+        app_counts = {p: {"with_code": 0, "without_code": int(applied.get(p, 0)),
+                          "via_redirect": 0, "via_api": 0} for p in programs}
+        return build_result(
+            programs=programs, stage_rows=stage_rows, matrix_counts=mc,
+            total_leads=t, verified_leads=ver, redirect_leads=rd, redirect_verified=rdv,
+            api_leads=ap, api_verified=apv, relevant_leads=rel,
+            application_counts=app_counts, amount_spent={}, additional_attributed={},
+            detected_columns={"publisher": col_pub}, data_quality={"total_rows": len(frame)},
+        )
+
+    program_reports = {"All": {k: result[k] for k in
+                        ("programs", "columns", "matrix", "summary", "detected_columns", "data_quality")}}
+    for pub_name in pub_cats:
+        program_reports[pub_name] = make_program_result(work[work["pub"] == pub_name])
+    result["program_reports"] = program_reports
     return result
 
 
@@ -471,4 +491,21 @@ def aggregate_reports(reports, settings):
             if pr:
                 pub_reports[prog_name] = pr
         result["publisher_reports"] = pub_reports
+
+    # Program-per-publisher cumulative
+    pub_keys = set()
+    for r in reports:
+        pr = (r.get("result") or {}).get("program_reports") or {}
+        pub_keys.update(k for k in pr.keys() if k != "All")
+    prog_reports = {"All": {k: result[k] for k in
+                    ("programs", "columns", "matrix", "summary") if k in result}}
+    for pub_name in pub_keys:
+        subs = [r["result"]["program_reports"][pub_name] for r in reports
+                if r.get("result") and (r["result"].get("program_reports") or {}).get(pub_name)]
+        if subs:
+            pr = _aggregate(subs, programs, stage_rows)
+            pr["data_quality"] = {"weeks_aggregated": weeks}
+            prog_reports[pub_name] = pr
+    if len(prog_reports) > 1:
+        result["program_reports"] = prog_reports
     return result

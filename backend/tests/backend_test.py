@@ -36,6 +36,20 @@ def assert_publisher_report_shape(report, expected_total):
         assert row["total"] == sum(row["values"].values())
 
 
+def assert_program_report_shape(report, expected_total=None):
+    """Validate the transposed programs-per-publisher report structure."""
+    assert isinstance(report, dict)
+    assert report["programs"] == ["B.Com", "BBA", "PGDM"]
+    assert report["columns"] == ["B.Com", "BBA", "PGDM", "Total"]
+    assert len(report["matrix"]) == 10
+    assert len(report["summary"]) >= 20
+    if expected_total is not None:
+        assert summary_row(report, "Total Leads")["total"] == expected_total
+    for row in report["matrix"]:
+        assert set(row["values"]) == {"B.Com", "BBA", "PGDM"}
+        assert row["total"] == sum(row["values"].values())
+
+
 def wait_until_ready(client, report_id, timeout=60):
     """Poll a created report until background processing is complete."""
     deadline = time.time() + timeout
@@ -162,6 +176,21 @@ class TestLeadPulseNewFeatures:
             assert set(publisher_reports[program]["programs"]) == all_publishers
         assert all_time["result"]["publisher_report"] == publisher_reports["All"]
 
+        program_reports = all_time["result"].get("program_reports")
+        expected_program_report_keys = {
+            "All", "Collegedunia", "Shiksha", "Google Ads", "Meta Ads",
+            "CollegeSearch", "Organic/Direct", "Sulekha",
+        }
+        assert set(program_reports) == expected_program_report_keys
+        for publisher, program_report in program_reports.items():
+            assert_program_report_shape(program_report)
+        assert summary_row(program_reports["Collegedunia"], "Total Leads")["total"] == 12682
+        cumulative_collegedunia_applied = next(
+            row for row in program_reports["Collegedunia"]["matrix"] if row["stage"] == "APPLIED"
+        )
+        assert cumulative_collegedunia_applied["values"] == {"B.Com": 14, "BBA": 18, "PGDM": 56}
+        assert cumulative_collegedunia_applied["total"] == 88
+
         ranged_response = api_client.get(
             f"{BASE_URL}/api/reports/cumulative",
             params={"start": "2026-01-01", "end": "2026-12-31"},
@@ -278,6 +307,23 @@ class TestLeadPulseNewFeatures:
         for program, expected_total in expected_totals.items():
             assert_publisher_report_shape(publisher_reports[program], expected_total)
             assert set(publisher_reports[program]["programs"]) == all_publishers
+
+        program_reports = report["result"].get("program_reports")
+        expected_program_report_keys = {
+            "All", "Collegedunia", "Shiksha", "Google Ads", "Meta Ads",
+            "CollegeSearch", "Organic/Direct", "Sulekha",
+        }
+        assert set(program_reports) == expected_program_report_keys
+        assert set(program_reports["All"]) == {
+            "programs", "columns", "matrix", "summary", "detected_columns", "data_quality"
+        }
+        for publisher, program_report in program_reports.items():
+            assert_program_report_shape(program_report)
+        collegedunia_applied = next(
+            row for row in program_reports["Collegedunia"]["matrix"] if row["stage"] == "APPLIED"
+        )
+        assert collegedunia_applied["values"] == {"B.Com": 7, "BBA": 9, "PGDM": 28}
+        assert collegedunia_applied["total"] == 44
         assert report["result"]["data_quality"]["test_leads_excluded"] >= 0
 
         amounts = {"B.Com": 800.0, "BBA": 7000.0, "PGDM": 11600.0}
