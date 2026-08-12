@@ -1,4 +1,4 @@
-"""E2E regression tests for cumulative ranges, TEST-lead filtering, settings, reports, exports, and trends."""
+"""E2E regression tests for per-program publisher reports, cumulative ranges, filtering, settings, exports, and trends."""
 import io
 import os
 import time
@@ -16,6 +16,24 @@ if not base_url:
 BASE_URL = base_url.rstrip("/")
 
 STATE = {"created_ids": []}
+
+
+def summary_row(result, label):
+    """Return a named summary row and fail clearly if the report is incomplete."""
+    return next(row for row in result["summary"] if row.get("label") == label)
+
+
+def assert_publisher_report_shape(report, expected_total):
+    """Validate full publisher report structure, totals, and rightmost Total column."""
+    assert isinstance(report, dict)
+    assert report["programs"]
+    assert report["columns"] == report["programs"] + ["Total"]
+    assert summary_row(report, "Total Leads")["total"] == expected_total
+    assert len(report["matrix"]) == 10
+    assert len(report["summary"]) >= 20
+    for row in report["matrix"]:
+        assert set(row["values"]) == set(report["programs"])
+        assert row["total"] == sum(row["values"].values())
 
 
 def wait_until_ready(client, report_id, timeout=60):
@@ -131,9 +149,18 @@ class TestLeadPulseNewFeatures:
         all_time = all_time_response.json()
         assert all_time["week_label"].startswith("Report Till Date")
         assert all_time["range"] == {"start": None, "end": None}
-        assert all_time["result"]["data_quality"]["weeks_aggregated"] >= 2
-        assert all_time["kpis"]["total_leads"] > 0
+        assert all_time["result"]["data_quality"]["weeks_aggregated"] == 2
+        assert all_time["kpis"]["total_leads"] == 44786
         assert isinstance(all_time["result"].get("publisher_report"), dict)
+
+        publisher_reports = all_time["result"].get("publisher_reports")
+        assert list(publisher_reports) == ["All", "B.Com", "BBA", "PGDM"]
+        expected_totals = {"All": 44786, "B.Com": 5388, "BBA": 11494, "PGDM": 27904}
+        all_publishers = set(publisher_reports["All"]["programs"])
+        for program, expected_total in expected_totals.items():
+            assert_publisher_report_shape(publisher_reports[program], expected_total)
+            assert set(publisher_reports[program]["programs"]) == all_publishers
+        assert all_time["result"]["publisher_report"] == publisher_reports["All"]
 
         ranged_response = api_client.get(
             f"{BASE_URL}/api/reports/cumulative",
@@ -242,8 +269,16 @@ class TestLeadPulseNewFeatures:
         applied = next(row for row in report["result"]["matrix"] if row["stage"] == "APPLIED")
         assert applied["values"] == {"B.Com": 14, "BBA": 41, "PGDM": 71}
         assert applied["total"] == 126
-        assert isinstance(report["result"]["publisher_report"], dict)
-        assert report["result"]["publisher_report"]["programs"]
+        publisher_report = report["result"]["publisher_report"]
+        publisher_reports = report["result"].get("publisher_reports")
+        assert list(publisher_reports) == ["All", "B.Com", "BBA", "PGDM"]
+        assert publisher_report == publisher_reports["All"]
+        expected_totals = {"All": 22393, "B.Com": 2694, "BBA": 5747, "PGDM": 13952}
+        all_publishers = set(publisher_reports["All"]["programs"])
+        for program, expected_total in expected_totals.items():
+            assert_publisher_report_shape(publisher_reports[program], expected_total)
+            assert set(publisher_reports[program]["programs"]) == all_publishers
+        assert report["result"]["data_quality"]["test_leads_excluded"] >= 0
 
         amounts = {"B.Com": 800.0, "BBA": 7000.0, "PGDM": 11600.0}
         attributed = {"B.Com": 2.0, "BBA": 5.0, "PGDM": 2.0}
@@ -265,6 +300,16 @@ class TestLeadPulseNewFeatures:
         assert persisted.status_code == 200
         assert persisted.json()["amount_spent"] == amounts
         assert persisted.json()["additional_attributed"] == attributed
+
+        exported = api_client.get(f"{BASE_URL}/api/reports/{created['id']}/export", timeout=60)
+        assert exported.status_code == 200
+        assert exported.headers["content-type"].startswith(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        assert exported.content[:2] == b"PK"
+        workbook = load_workbook(io.BytesIO(exported.content), read_only=True, data_only=True)
+        assert workbook.sheetnames == ["Weekly Report"]
+        assert workbook["Weekly Report"]["A2"].value == "Lead Stage"
 
     def test_07_publisher_amounts_regression(self, api_client):
         report_url = f"{BASE_URL}/api/reports/{STATE['sample_id']}"
@@ -291,6 +336,12 @@ class TestLeadPulseNewFeatures:
         assert summary["Amount Spent"]["values"][publisher] == 5000 * applied_count
         assert summary["Cost/Application"]["values"][publisher] == 5000
         assert doc["publisher_cpa"][publisher] == 5000
+        assert doc["result"]["publisher_reports"]["All"] == doc["result"]["publisher_report"]
+
+        persisted = api_client.get(report_url, timeout=20)
+        assert persisted.status_code == 200
+        persisted_result = persisted.json()["result"]
+        assert persisted_result["publisher_reports"]["All"] == persisted_result["publisher_report"]
 
     def test_08_trends_contains_created_ready_reports(self, api_client):
         response = api_client.get(f"{BASE_URL}/api/trends", timeout=20)
@@ -308,11 +359,13 @@ class TestLeadPulseNewFeatures:
         malformed = api_client.get(
             f"{BASE_URL}/api/reports/cumulative", params={"start": "not-a-date"}, timeout=30
         )
-        assert malformed.status_code == 422
+        assert malformed.status_code == 400
+        assert "Invalid start date" in malformed.json()["detail"]
 
         reversed_range = api_client.get(
             f"{BASE_URL}/api/reports/cumulative",
             params={"start": "2026-12-31", "end": "2026-01-01"},
             timeout=30,
         )
-        assert reversed_range.status_code in (400, 422)
+        assert reversed_range.status_code == 400
+        assert "start date must be on or before end date" in reversed_range.json()["detail"]

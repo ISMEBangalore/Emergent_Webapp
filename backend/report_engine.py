@@ -213,41 +213,47 @@ def compute_report(
     work["is_api"] = is_api.values
     work["is_redir"] = is_redir.values
 
-    def agg(colname, cats):
+    def agg(frame, colname, cats):
         def counts(mask=None):
-            sub = work if mask is None else work[mask.values if hasattr(mask, "values") else mask]
+            sub = frame if mask is None else frame[mask.values if hasattr(mask, "values") else mask]
             vc = sub[colname].value_counts()
             return {c: int(vc.get(c, 0)) for c in cats}
-        ct = pd.crosstab(work["bucket"], work[colname])
+        ct = pd.crosstab(frame["bucket"], frame[colname])
         mc = {row: {c: int(ct.loc[row, c]) if (row in ct.index and c in ct.columns) else 0 for c in cats}
               for row in stage_rows}
-        return (counts(), counts(work["verified"]), counts(work["is_redir"]),
-                counts(work["is_redir"] & work["verified"]), counts(work["is_api"]),
-                counts(work["is_api"] & work["verified"]), counts(work["relevant"]), mc)
+        return (counts(), counts(frame["verified"]), counts(frame["is_redir"]),
+                counts(frame["is_redir"] & frame["verified"]), counts(frame["is_api"]),
+                counts(frame["is_api"] & frame["verified"]), counts(frame["relevant"]), mc)
 
     (total_leads, verified_leads, redirect_leads, redirect_verified,
-     api_leads, api_verified, relevant_leads, matrix_counts) = agg("prog", all_cols)
+     api_leads, api_verified, relevant_leads, matrix_counts) = agg(work, "prog", all_cols)
 
     # ---- Publisher breakdown (top publishers by volume, rest -> Other) ----
     pub_vc = work["pub"].value_counts()
     top_pubs = [str(x) for x in pub_vc.head(12).index.tolist()]
     work["pub"] = work["pub"].where(work["pub"].isin(top_pubs), "Other")
     pub_cats = top_pubs + (["Other"] if len(pub_vc) > len(top_pubs) else [])
-    (p_total, p_ver, p_redir, p_redirv, p_api, p_apiv, p_rel, p_mc) = agg("pub", pub_cats)
-    # Use the APPLIED lead-stage count as the per-publisher application proxy
-    applied_row = p_mc.get("APPLIED", {})
-    pub_app_counts = {c: {"with_code": 0, "without_code": int(applied_row.get(c, 0)),
+
+    def make_publisher_result(frame):
+        (t, ver, rd, rdv, ap, apv, rel, mc) = agg(frame, "pub", pub_cats)
+        applied = mc.get("APPLIED", {})
+        app_counts = {c: {"with_code": 0, "without_code": int(applied.get(c, 0)),
                           "via_redirect": 0, "via_api": 0} for c in pub_cats}
-    publisher_result = build_result(
-        programs=pub_cats, stage_rows=stage_rows, matrix_counts=p_mc,
-        total_leads=p_total, verified_leads=p_ver, redirect_leads=p_redir,
-        redirect_verified=p_redirv, api_leads=p_api, api_verified=p_apiv,
-        relevant_leads=p_rel, application_counts=pub_app_counts, amount_spent={},
-        additional_attributed={},
-        detected_columns={"publisher": col_pub},
-        data_quality={"total_rows": n, "publisher_column_present": bool(col_pub),
-                      "publisher_count": int(len(pub_vc))},
-    )
+        return build_result(
+            programs=pub_cats, stage_rows=stage_rows, matrix_counts=mc,
+            total_leads=t, verified_leads=ver, redirect_leads=rd, redirect_verified=rdv,
+            api_leads=ap, api_verified=apv, relevant_leads=rel,
+            application_counts=app_counts, amount_spent={}, additional_attributed={},
+            detected_columns={"publisher": col_pub},
+            data_quality={"total_rows": len(frame), "publisher_column_present": bool(col_pub),
+                          "publisher_count": int(len(pub_vc))},
+        )
+
+    publisher_result = make_publisher_result(work)
+    # Per-program publisher breakdowns (same publisher columns for consistency)
+    publisher_reports = {"All": publisher_result}
+    for prog_name in programs:
+        publisher_reports[prog_name] = make_publisher_result(work[work["prog"] == prog_name])
 
     result = build_result(
         programs=programs, stage_rows=stage_rows, matrix_counts=matrix_counts,
@@ -268,6 +274,7 @@ def compute_report(
         },
     )
     result["publisher_report"] = publisher_result
+    result["publisher_reports"] = publisher_reports
     return result
 
 
@@ -437,19 +444,31 @@ def aggregate_reports(reports, settings):
     result = _aggregate(prog_results, programs, stage_rows)
     result["data_quality"] = {"weeks_aggregated": weeks}
 
-    # Publisher cumulative: union publisher columns, keep top 12 by total leads.
-    pub_results = [r["result"].get("publisher_report") for r in reports
-                   if r.get("result") and r["result"].get("publisher_report")]
-    if pub_results:
+    # Publisher cumulative (overall + per program): union publisher columns, top 12 by leads.
+    def pub_cumulative(getter):
+        pub_results = [getter(r["result"]) for r in reports
+                       if r.get("result") and getter(r["result"])]
+        if not pub_results:
+            return None
         totals = {}
         for pr in pub_results:
             for m in pr.get("matrix", []):
                 for c, v in m["values"].items():
                     totals[c] = totals.get(c, 0) + (v or 0)
-        pub_cols = [c for c, _ in sorted(totals.items(), key=lambda x: -x[1])][:12]
-        if "Other" in totals and "Other" not in pub_cols:
+        pub_cols = [c for c, _ in sorted(totals.items(), key=lambda x: -x[1]) if c != "Other"][:12]
+        if "Other" in totals:
             pub_cols.append("Other")
-        pub_cum = _aggregate(pub_results, pub_cols, stage_rows)
-        pub_cum["data_quality"] = {"weeks_aggregated": weeks}
-        result["publisher_report"] = pub_cum
+        cum = _aggregate(pub_results, pub_cols, stage_rows)
+        cum["data_quality"] = {"weeks_aggregated": weeks}
+        return cum
+
+    overall = pub_cumulative(lambda res: res.get("publisher_report"))
+    if overall:
+        result["publisher_report"] = overall
+        pub_reports = {"All": overall}
+        for prog_name in programs:
+            pr = pub_cumulative(lambda res, p=prog_name: (res.get("publisher_reports") or {}).get(p))
+            if pr:
+                pub_reports[prog_name] = pr
+        result["publisher_reports"] = pub_reports
     return result

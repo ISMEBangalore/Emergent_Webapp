@@ -344,6 +344,8 @@ async def update_publisher_amounts(report_id: str, payload: PublisherAmountUpdat
     summ["Modified CPA after attribution"]["values"] = cost
     summ["Modified CPA after attribution"]["total"] = summ["Cost/Application"]["total"]
     result["publisher_report"] = pr
+    if isinstance(result.get("publisher_reports"), dict):
+        result["publisher_reports"]["All"] = pr
     await db.reports.update_one(
         {"id": report_id},
         {"$set": {"result": result, "publisher_amount_spent": payload.amount_spent,

@@ -1,0 +1,59 @@
+{
+  "summary": "Validated the new per-program publisher breakdown end-to-end through the public API and browser. Sample and cumulative publisher_reports have the required All/B.Com/BBA/PGDM reports, exact totals, identical publisher sets, complete rows, and rightmost Total values. Program chips switch correctly, cumulative presets work, regressions/build pass, and 8/9 backend tests pass. One persistence/UI synchronization defect remains after saving publisher spend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PATCH /api/reports/{id}/publisher-amounts",
+        "issue": "The patch recalculates result.publisher_report but does not update result.publisher_reports.All. This breaks the required legacy-equals-All invariant after a save; the returned and persisted objects differ in Amount Spent, Cost/Application, and Modified CPA rows.",
+        "priority": "HIGH"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Publisher Ad Spend & CPA save",
+        "issue": "Save succeeds and shows the success toast, but the visible All-program publisher table remains stale. Reproduced with Collegedunia CPA 123: expected Amount Spent 5,412, displayed 0 because ReportTabs renders publisher_reports.All while the API updates only publisher_report.",
+        "affected_selectors": [
+          "[data-testid='publisher-spend-panel']",
+          "[data-testid='save-publisher-btn']",
+          "[data-testid='summary-row-Amount Spent']"
+        ]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Report Till Date date range",
+        "issues": [
+          "The From/To controls remain browser-native input[type=date] fields rather than the available shadcn calendar/date-range component."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "In update_publisher_amounts, synchronize result.publisher_reports['All'] with the recalculated legacy publisher_report before persisting and returning the document; then verify the visible Amount Spent and Cost/Application rows update immediately after Save."
+  ],
+  "critical_code_review_comments": [
+    "server.py update_publisher_amounts assigns result['publisher_report'] = pr but never assigns result['publisher_reports']['All'] = pr. Since ReportTabs intentionally prefers publisher_reports, the API response contains two contradictory All-publisher reports and the UI renders the stale one."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_4.json"
+  ],
+  "success_rate": {
+    "backend": "88.9% (8/9 pytest cases; all new generation/cumulative totals and regressions pass except post-patch All synchronization)",
+    "frontend": "94% (all requested navigation, filters, totals, panels, presets, and regressions passed; 1 post-save table synchronization failure)"
+  },
+  "seed_data_creation": "Each backend run created two TEST-filter upload reports and one sample report; UI testing created one additional sample report. All test-created reports were deleted, global settings were restored, and the two pre-existing ready sample reports remain.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Re-run backend_test.py; test_07 should pass once publisher_reports.All is synchronized. Browser E2E confirmed report History open, All/B.Com/BBA/PGDM APPLIED totals 126/14/41/71, per-row Total sums, cumulative PGDM total 27,904 and APPLIED 142, preset-year, Compare charts/table, Settings, Dashboard, and clean console. Frontend production build compiled successfully.",
+  "rca_of_the_issue": "MongoDB deserialization gives publisher_report and publisher_reports.All separate nested objects. PATCH mutates only publisher_report. ReportTabs prefers publisher_reports and therefore renders its unchanged All report after setDoc receives the successful response. Assigning the recalculated object into both locations restores the invariant and visible state."
+}

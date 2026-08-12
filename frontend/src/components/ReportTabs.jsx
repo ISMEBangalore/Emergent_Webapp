@@ -1,8 +1,14 @@
+import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReportTable } from "@/components/ReportTable";
 
 export const ReportTabs = ({ result, publisherPanel = null }) => {
-  const pub = result.publisher_report;
+  const byProgram = result.publisher_reports || null;
+  const fallback = result.publisher_report;
+  const options = byProgram ? ["All", ...(result.programs || [])] : ["All"];
+  const [pubProg, setPubProg] = useState("All");
+
+  const pub = byProgram ? (byProgram[pubProg] || byProgram.All) : fallback;
   const pubEmpty =
     !pub || !pub.programs?.length || (pub.programs.length === 1 && pub.programs[0] === "Unknown");
 
@@ -25,6 +31,25 @@ export const ReportTabs = ({ result, publisherPanel = null }) => {
         ) : (
           <>
             {publisherPanel}
+            {byProgram && (
+              <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="publisher-program-filter">
+                <span className="text-xs uppercase tracking-wide text-slate-500 mr-1">Program:</span>
+                {options.map((opt) => (
+                  <button
+                    key={opt}
+                    data-testid={`pub-prog-${opt}`}
+                    onClick={() => setPubProg(opt)}
+                    className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                      pubProg === opt
+                        ? "bg-[#002FA7] text-white border-[#002FA7]"
+                        : "border-slate-200 text-slate-600 hover:border-[#002FA7] hover:text-[#002FA7]"
+                    }`}
+                  >
+                    {opt === "All" ? "All programs" : opt}
+                  </button>
+                ))}
+              </div>
+            )}
             <ReportTable result={pub} />
           </>
         )}
