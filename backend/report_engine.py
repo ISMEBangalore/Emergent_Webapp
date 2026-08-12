@@ -57,6 +57,25 @@ DATE_CANDIDATES = [
 ]
 
 
+def read_data_sheet(content: bytes) -> pd.DataFrame:
+    """Read the sheet that actually holds row-level data.
+    Some CRM exports put a pivot/summary sheet first; pick the largest sheet."""
+    import openpyxl
+    best = 0
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True)
+        best_score = -1
+        for s in wb.sheetnames:
+            ws = wb[s]
+            score = (ws.max_row or 0) * (ws.max_column or 0)
+            if score > best_score:
+                best, best_score = s, score
+        wb.close()
+    except Exception:
+        best = 0
+    return pd.read_excel(io.BytesIO(content), engine="openpyxl", sheet_name=best)
+
+
 def _norm(s: Any) -> str:
     return re.sub(r"\s+", " ", str(s)).strip().lower()
 
@@ -123,7 +142,7 @@ def compute_report(
     additional_attributed = additional_attributed or {}
     application_counts = application_counts or {}
 
-    df = pd.read_excel(io.BytesIO(lead_bytes), engine="openpyxl")
+    df = read_data_sheet(lead_bytes)
     raw_n = len(df)
 
     # ---- Exclude TEST leads (by name / remark / email / stage) ----

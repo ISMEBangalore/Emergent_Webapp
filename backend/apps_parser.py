@@ -7,10 +7,10 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from report_engine import _find_col, program_series
+from report_engine import _find_col, program_series, read_data_sheet
 
 
-PROG_CANDS = ["Programme", "Course", "Program"]
+PROG_CANDS = ["Courses Preference", "Course Preference", "Course", "Programme", "Program"]
 ORIGIN_CANDS = ["Lead Origin", "Lead Origin(Primary)", "Primary Traffic Channel", "Publisher Name", "Publisher"]
 # Discount / coupon code columns (a non-empty value => "application with code")
 CODE_CANDS = [
@@ -39,7 +39,7 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
 
     for content in files:
         try:
-            df = pd.read_excel(io.BytesIO(content), engine="openpyxl")
+            df = read_data_sheet(content)
         except Exception:
             continue
         if len(df) == 0:
@@ -56,12 +56,24 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
                 df = df[keep.fillna(False)].reset_index(drop=True)
                 if len(df) == 0:
                     continue
-        col_prog = _find_col(df, PROG_CANDS, prefer_data=True)
         col_origin = _find_col(df, ORIGIN_CANDS, prefer_data=True)
         cands = ([code_field] if code_field else []) + CODE_CANDS
         col_code = _find_col(df, cands, prefer_data=True)
 
-        prog = program_series(df[col_prog], programs) if col_prog else pd.Series([None] * len(df), index=df.index)
+        # Choose the course column that best matches the configured programs.
+        prog = None
+        best_matched = -1
+        lut = {c.strip().lower(): c for c in df.columns}
+        for cand in PROG_CANDS:
+            col = lut.get(cand.strip().lower())
+            if col is None or not df[col].notna().any():
+                continue
+            ps = program_series(df[col], programs)
+            matched = int(ps.notna().sum())
+            if matched > best_matched:
+                best_matched, prog = matched, ps
+        if prog is None:
+            prog = pd.Series([None] * len(df), index=df.index)
         if col_code is not None:
             code_norm = df[col_code].astype("string").str.strip().str.upper().fillna("")
             has_code = ~code_norm.isin(BLANK_TOKENS)

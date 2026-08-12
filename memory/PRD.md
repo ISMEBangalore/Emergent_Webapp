@@ -46,6 +46,18 @@ auto-generates a weekly report (Program × Lead-Stage matrix + derived metrics) 
 - Source files persisted in GridFS; `POST /api/reports/{id}/regenerate` re-slices without re-upload.
 - Fixed: broken `report_engine.py` (duplicate block + undefined date vars) that crashed the backend.
 
+## Real-file fixes — 2026-06 (10Aug2026 dump)
+- ROOT CAUSE of wrong totals: the Lead workbook has TWO sheets — Sheet2 (pivot summary, 7 rows)
+  first and Sheet1 (raw data, 156,944 rows) second. `pd.read_excel` defaulted to the first sheet.
+  Added `read_data_sheet()` which picks the LARGEST sheet (raw data) in both lead + app parsing.
+- App program attribution: app parser now picks the course column that best matches configured
+  programs (tries "Courses Preference","Course Preference","Course","Programme","Program"), so
+  UG apps (Programme="BACHELOR DEGREE PROGRAMME") map correctly to B.Com/BBA instead of 0.
+- Verified totals on real file: B.Com 21,940 · BBA 31,573 · PGDM 63,448 (of 156,758 leads after
+  186 test leads excluded). Date coverage 2025-10-05 → 2026-08-10 via "User Registration Date".
+- NOTE: BCA (29k), MCA, PhD, "COURSE NOT AVAILABLE" leads fall into "Other" (not shown) because
+  only B.Com/BBA/PGDM are configured programs. Add them in Settings if the user wants them shown.
+
 ## Backlog / Next
 - P1: Per-program application file → program auto-detect from filename.
 - P1: shadcn calendar date picker on Generate page (currently native date input).
