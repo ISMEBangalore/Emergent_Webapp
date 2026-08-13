@@ -1,7 +1,11 @@
 """Generate a realistic sample Leads dump (.xlsx) matching the reference report."""
 import os
 import random
+from pathlib import Path
+
 import pandas as pd
+
+OUT_DIR = Path(__file__).parent
 
 random.seed(7)
 
@@ -66,6 +70,6 @@ for bucket, counts in DIST.items():
 
 random.shuffle(rows)
 df = pd.DataFrame(rows)
-os.makedirs("/app/backend/sample_data", exist_ok=True)
-df.to_excel("/app/backend/sample_data/sample_leads.xlsx", index=False)
+os.makedirs(OUT_DIR, exist_ok=True)
+df.to_excel(OUT_DIR / "sample_leads.xlsx", index=False)
 print("rows", len(df), "publishers:", df["Publisher Name"].nunique())

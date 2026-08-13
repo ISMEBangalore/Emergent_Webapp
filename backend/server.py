@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
+from auth import TokenData, bootstrap_admin, create_access_token, get_current_user, verify_password
 from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports
 from apps_parser import parse_application_files
 from excel_export import build_workbook
@@ -27,7 +28,8 @@ db = client[os.environ["DB_NAME"]]
 fs_bucket = AsyncIOMotorGridFSBucket(db)
 
 app = FastAPI()
-api_router = APIRouter(prefix="/api")
+auth_router = APIRouter(prefix="/api/auth")
+api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crm_report")
@@ -105,6 +107,30 @@ def _parse_json_form(raw: Optional[str]) -> Dict[str, Any]:
         return json.loads(raw)
     except Exception:
         return {}
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+@auth_router.post("/login")
+async def login(payload: LoginIn):
+    user = await db.users.find_one({"username": payload.username})
+    if not user or not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(401, "Invalid username or password")
+    token = create_access_token(user["username"])
+    return {"access_token": token, "token_type": "bearer", "username": user["username"]}
+
+
+@auth_router.get("/me")
+async def me(current: TokenData = Depends(get_current_user)):
+    return {"username": current.username}
 
 
 @api_router.get("/")
@@ -478,14 +504,26 @@ async def delete_view(view_id: str):
     return {"deleted": True}
 
 
+app.include_router(auth_router)
 app.include_router(api_router)
+
+_cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+if not _cors_origins:
+    logger.warning("CORS_ORIGINS is not set — defaulting to http://localhost:3000 only.")
+    _cors_origins = ["http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_credentials=False,  # auth is via Bearer token, not cookies — no credentials needed
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def bootstrap_on_startup():
+    await bootstrap_admin(db)
 
 
 @app.on_event("shutdown")

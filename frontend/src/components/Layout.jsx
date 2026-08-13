@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
-import { ChartBar, UploadSimple, ClockCounterClockwise, GearSix, GraduationCap, List, X, ArrowsDownUp, ChartLineUp } from "@phosphor-icons/react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { ChartBar, UploadSimple, ClockCounterClockwise, GearSix, GraduationCap, List, X, ArrowsDownUp, ChartLineUp, SignOut } from "@phosphor-icons/react";
+import { useAuth } from "@/lib/auth";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: ChartBar, testid: "nav-dashboard" },
@@ -25,7 +26,14 @@ const Brand = () => (
 
 export const Layout = ({ children }) => {
   const loc = useLocation();
+  const navigate = useNavigate();
+  const { username, logout } = useAuth();
   const [open, setOpen] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   const NavLinks = ({ onClick }) => (
     <>
@@ -56,7 +64,19 @@ export const Layout = ({ children }) => {
       <aside className="hidden lg:flex w-64 shrink-0 border-r border-slate-200 bg-white flex-col fixed h-screen z-20">
         <div className="px-6 py-6 border-b border-slate-200"><Brand /></div>
         <nav className="flex-1 px-3 py-4 space-y-1"><NavLinks /></nav>
-        <div className="px-6 py-4 border-t border-slate-200 text-[11px] text-slate-400">Data source: merrito.com CRM</div>
+        <div className="px-6 py-4 border-t border-slate-200">
+          <p className="text-[11px] text-slate-400 mb-2">Data source: merrito.com CRM</p>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-600 truncate" data-testid="current-username">{username}</span>
+            <button
+              onClick={handleLogout}
+              data-testid="logout-btn"
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-[#002FA7]"
+            >
+              <SignOut size={15} weight="bold" /> Sign out
+            </button>
+          </div>
+        </div>
       </aside>
 
       {/* Mobile top bar */}
@@ -77,6 +97,12 @@ export const Layout = ({ children }) => {
               <button onClick={() => setOpen(false)} className="p-1 text-slate-500"><X size={22} weight="bold" /></button>
             </div>
             <nav className="space-y-1"><NavLinks onClick={() => setOpen(false)} /></nav>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-600 truncate">{username}</span>
+              <button onClick={handleLogout} className="flex items-center gap-1 text-xs text-slate-500 hover:text-[#002FA7]">
+                <SignOut size={15} weight="bold" /> Sign out
+              </button>
+            </div>
           </div>
         </div>
       )}

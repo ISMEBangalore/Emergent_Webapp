@@ -62,11 +62,13 @@ export default function CumulativeView() {
           </div>
           <p className="text-slate-500 mt-1">Aggregate every weekly report in a date range — leave dates empty for all-time.</p>
         </div>
-        <a href={api.cumulativeExportUrl({ start, end })} data-testid="export-cumulative-btn">
-          <Button className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2">
-            <DownloadSimple size={18} weight="bold" /> Export to Excel
-          </Button>
-        </a>
+        <Button
+          data-testid="export-cumulative-btn"
+          className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2"
+          onClick={() => api.downloadCumulative({ start, end }).catch(() => toast.error("Could not download the export."))}
+        >
+          <DownloadSimple size={18} weight="bold" /> Export to Excel
+        </Button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-md p-5 mb-6">

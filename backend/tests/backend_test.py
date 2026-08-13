@@ -2,17 +2,29 @@
 import io
 import os
 import time
+from pathlib import Path
 
 import pytest
 import requests
 from dotenv import dotenv_values
 from openpyxl import Workbook, load_workbook
 
-frontend_env = dotenv_values("/app/frontend/.env")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+frontend_env = dotenv_values(REPO_ROOT / "frontend" / ".env")
 base_url = os.environ.get("REACT_APP_BACKEND_URL") or frontend_env.get("REACT_APP_BACKEND_URL")
 if not base_url:
     raise RuntimeError("REACT_APP_BACKEND_URL is missing")
 BASE_URL = base_url.rstrip("/")
+
+# Test-run credentials for a user that must already exist in the target DB
+# (e.g. the bootstrapped admin — see backend/.env.example ADMIN_USERNAME/ADMIN_PASSWORD).
+TEST_USERNAME = os.environ.get("TEST_ADMIN_USERNAME") or os.environ.get("ADMIN_USERNAME")
+TEST_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("ADMIN_PASSWORD")
+if not TEST_USERNAME or not TEST_PASSWORD:
+    raise RuntimeError(
+        "TEST_ADMIN_USERNAME/TEST_ADMIN_PASSWORD (or ADMIN_USERNAME/ADMIN_PASSWORD) "
+        "must be set to a valid login for the target backend."
+    )
 
 DEFAULT_PROGRAMS = ["B.Com", "BBA", "PGDM"]
 EXPECTED_PUBLISHERS = {
@@ -88,9 +100,17 @@ def upload_report(client, label, lead_bytes, application_files=None):
 
 @pytest.fixture(scope="module")
 def api_client():
-    """Public API client with deterministic settings and cleanup."""
+    """Authenticated API client with deterministic settings and cleanup."""
     session = requests.Session()
     session.headers.update({"Accept": "application/json"})
+    login = session.post(
+        f"{BASE_URL}/api/auth/login",
+        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+        timeout=20,
+    )
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+    session.headers.update({"Authorization": f"Bearer {token}"})
     reset = session.put(
         f"{BASE_URL}/api/settings",
         json={"programs": DEFAULT_PROGRAMS, "included_publishers": [],

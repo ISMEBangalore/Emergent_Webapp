@@ -172,11 +172,13 @@ export default function ReportView() {
           </div>
           <p className="text-slate-500 mt-1">{doc.week_date} · Source file: {doc.lead_filename}</p>
         </div>
-        <a href={api.exportUrl(id)} data-testid="export-btn">
-          <Button className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2">
-            <DownloadSimple size={18} weight="bold" /> Export to Excel
-          </Button>
-        </a>
+        <Button
+          data-testid="export-btn"
+          className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2"
+          onClick={() => api.downloadReport(id).catch(() => toast.error("Could not download the export."))}
+        >
+          <DownloadSimple size={18} weight="bold" /> Export to Excel
+        </Button>
       </div>
 
       {doc.lead_file_id && (
