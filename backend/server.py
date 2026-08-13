@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / ".env")  # must run before importing auth (reads env vars at import time)
+
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
@@ -18,9 +22,6 @@ from auth import TokenData, bootstrap_admin, create_access_token, get_current_us
 from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports
 from apps_parser import parse_application_files
 from excel_export import build_workbook
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / ".env")
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -518,6 +519,7 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],  # so the frontend can read the export filename
 )
 
 
