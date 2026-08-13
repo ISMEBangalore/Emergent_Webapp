@@ -1,0 +1,40 @@
+services:
+  # FastAPI backend
+  - type: web
+    name: isme-leadpulse-api
+    env: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MONGO_URL
+        sync: false # paste the Atlas connection string (see README)
+      - key: DB_NAME
+        value: leadpulse
+      - key: CORS_ORIGINS
+        sync: false # set after the frontend URL is known (see README)
+      - key: JWT_SECRET
+        generateValue: true # Render generates a random secret on first deploy
+      - key: TOKEN_EXPIRE_HOURS
+        value: "24"
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+  # React frontend, built as a static site
+  - type: static
+    name: isme-leadpulse-app
+    rootDir: frontend
+    buildCommand: yarn install --frozen-lockfile && yarn build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        sync: false # set after the backend URL is known (see README)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
