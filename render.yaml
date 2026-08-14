@@ -26,7 +26,8 @@ services:
         sync: false
 
   # React frontend, built as a static site
-  - type: static
+  - type: web
+    runtime: static
     name: isme-leadpulse-app
     rootDir: frontend
     buildCommand: yarn install --frozen-lockfile && yarn build
