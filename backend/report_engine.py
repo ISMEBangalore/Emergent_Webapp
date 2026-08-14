@@ -135,7 +135,7 @@ def compute_report(
     settings: Dict[str, Any],
     amount_spent: Optional[Dict[str, float]] = None,
     additional_attributed: Optional[Dict[str, float]] = None,
-    application_counts: Optional[Dict[str, Dict[str, int]]] = None,
+    application_counts: Optional[Dict[str, Any]] = None,
     date_range: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     cfg = {**DEFAULT_SETTINGS, **(settings or {})}
@@ -144,6 +144,13 @@ def compute_report(
     amount_spent = amount_spent or {}
     additional_attributed = additional_attributed or {}
     application_counts = application_counts or {}
+    apps_by_program = application_counts.get("by_program", {})
+    apps_by_publisher = {str(k).strip().upper(): v for k, v in (application_counts.get("by_publisher") or {}).items()}
+    apps_by_program_publisher = {
+        p: {str(k).strip().upper(): v for k, v in (pubs or {}).items()}
+        for p, pubs in (application_counts.get("by_program_publisher") or {}).items()
+    }
+    _blank_app_counts = {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0}
 
     df = read_data_sheet(lead_bytes)
     raw_n = len(df)
@@ -317,9 +324,7 @@ def compute_report(
 
     def make_publisher_result(frame):
         (t, ver, rd, rdv, ap, apv, rel, mc) = agg(frame, "pub", pub_cats)
-        applied = mc.get("APPLIED", {})
-        app_counts = {c: {"with_code": 0, "without_code": int(applied.get(c, 0)),
-                          "via_redirect": 0, "via_api": 0} for c in pub_cats}
+        app_counts = {c: apps_by_publisher.get(c.strip().upper(), _blank_app_counts) for c in pub_cats}
         return build_result(
             programs=pub_cats, stage_rows=stage_rows, matrix_counts=mc,
             total_leads=t, verified_leads=ver, redirect_leads=rd, redirect_verified=rdv,
@@ -341,7 +346,7 @@ def compute_report(
         total_leads=total_leads, verified_leads=verified_leads,
         redirect_leads=redirect_leads, redirect_verified=redirect_verified,
         api_leads=api_leads, api_verified=api_verified, relevant_leads=relevant_leads,
-        application_counts=application_counts, amount_spent=amount_spent,
+        application_counts=apps_by_program, amount_spent=amount_spent,
         additional_attributed=additional_attributed,
         detected_columns={
             "program": col_prog, "stage": col_stage,
@@ -363,11 +368,10 @@ def compute_report(
     result["data_quality"]["available_publishers"] = available_publishers
 
     # Program breakdown per publisher (columns = programs, one report per publisher)
-    def make_program_result(frame):
+    def make_program_result(frame, pub_name):
         (t, ver, rd, rdv, ap, apv, rel, mc) = agg(frame, "prog", all_cols)
-        applied = mc.get("APPLIED", {})
-        app_counts = {p: {"with_code": 0, "without_code": int(applied.get(p, 0)),
-                          "via_redirect": 0, "via_api": 0} for p in programs}
+        pub_key = pub_name.strip().upper()
+        app_counts = {p: apps_by_program_publisher.get(p, {}).get(pub_key, _blank_app_counts) for p in programs}
         return build_result(
             programs=programs, stage_rows=stage_rows, matrix_counts=mc,
             total_leads=t, verified_leads=ver, redirect_leads=rd, redirect_verified=rdv,
@@ -379,7 +383,7 @@ def compute_report(
     program_reports = {"All": {k: result[k] for k in
                         ("programs", "columns", "matrix", "summary", "detected_columns", "data_quality")}}
     for pub_name in pub_cats:
-        program_reports[pub_name] = make_program_result(work[work["pub"] == pub_name])
+        program_reports[pub_name] = make_program_result(work[work["pub"] == pub_name], pub_name)
     result["program_reports"] = program_reports
     return result
 

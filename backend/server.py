@@ -90,7 +90,7 @@ async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
         )
         await db.reports.update_one(
             {"id": report_id},
-            {"$set": {"status": "ready", "result": result, "application_counts": app_counts,
+            {"$set": {"status": "ready", "result": result, "application_counts": app_counts.get("by_program", app_counts),
                       "kpis": _kpis(result), "date_range": date_range or {}, "updated_at": now_iso()}},
         )
     except Exception as e:  # noqa
@@ -278,7 +278,9 @@ async def create_sample_report():
     }
     await db.reports.insert_one(doc)
     asyncio.create_task(_process(report_id, lead_bytes, [], settings,
-                                 SAMPLE_AMOUNT, {}, preset_app_counts=SAMPLE_APP_COUNTS))
+                                 SAMPLE_AMOUNT, {},
+                                 preset_app_counts={"by_program": SAMPLE_APP_COUNTS, "by_publisher": {},
+                                                    "by_program_publisher": {}}))
     return {"id": report_id, "status": "processing"}
 
 

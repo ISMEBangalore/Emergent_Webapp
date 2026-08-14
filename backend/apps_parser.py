@@ -12,6 +12,7 @@ from report_engine import _find_col, program_series, read_data_sheet
 
 PROG_CANDS = ["Courses Preference", "Course Preference", "Course", "Programme", "Program"]
 ORIGIN_CANDS = ["Lead Origin", "Lead Origin(Primary)", "Primary Traffic Channel", "Publisher Name", "Publisher"]
+PUB_CANDS = ["Publisher", "Publisher Name"]
 # Discount / coupon code columns (a non-empty value => "application with code")
 CODE_CANDS = [
     "Discount Coupon", "Coupon Code", "Coupon", "Applied Coupon", "Coupon Applied",
@@ -26,9 +27,16 @@ APP_DATE_CANDS = [
     "Created Date", "Payment Date", "Date",
 ]
 
+_EMPTY_COUNTS = {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0}
+
+
+def _blank_counts() -> Dict[str, int]:
+    return dict(_EMPTY_COUNTS)
+
 
 def parse_application_files(files: List[bytes], settings: Dict[str, Any],
-                            date_range: Dict[str, Any] = None) -> Dict[str, Dict[str, int]]:
+                            date_range: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Returns {"by_program": {...}, "by_publisher": {...}, "by_program_publisher": {prog: {pub: {...}}}}."""
     programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
     api_pat = [p.upper() for p in settings.get("api_patterns", ["API"])]
     redir_pat = [p.upper() for p in settings.get("redirect_patterns", ["REDIRECT", "PUSH", "WIDGET"])]
@@ -37,7 +45,15 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
     d_start = (str(date_range.get("start") or "")).strip() or None
     d_end = (str(date_range.get("end") or "")).strip() or None
 
-    counts = {p: {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0} for p in programs}
+    by_program = {p: _blank_counts() for p in programs}
+    by_publisher: Dict[str, Dict[str, int]] = {}
+    by_program_publisher: Dict[str, Dict[str, Dict[str, int]]] = {p: {} for p in programs}
+
+    def _bump(target: Dict[str, int], mask) -> None:
+        target["with_code"] += int((mask & has_code.values).sum())
+        target["without_code"] += int((mask & ~has_code.values).sum())
+        target["via_redirect"] += int((mask & is_redir.values).sum())
+        target["via_api"] += int((mask & is_api.values).sum())
 
     for content in files:
         try:
@@ -74,6 +90,7 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
             if len(df) == 0:
                 continue
         col_origin = _find_col(df, ORIGIN_CANDS, prefer_data=True)
+        col_pub = _find_col(df, PUB_CANDS, prefer_data=True)
         cands = ([code_field] if code_field else []) + CODE_CANDS
         col_code = _find_col(df, cands, prefer_data=True)
 
@@ -110,10 +127,28 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
             is_api = pd.Series(False, index=df.index)
             is_redir = pd.Series(False, index=df.index)
 
+        if col_pub is not None:
+            pub_raw = df[col_pub].astype("string").str.strip()
+            pub_raw = pub_raw.where(pub_raw.notna() & (pub_raw != ""), "Unknown")
+        else:
+            pub_raw = pd.Series(["Unknown"] * len(df), index=df.index, dtype="object")
+
         for p in programs:
             mask = (prog.values == p)
-            counts[p]["with_code"] += int((mask & has_code.values).sum())
-            counts[p]["without_code"] += int((mask & ~has_code.values).sum())
-            counts[p]["via_redirect"] += int((mask & is_redir.values).sum())
-            counts[p]["via_api"] += int((mask & is_api.values).sum())
-    return counts
+            _bump(by_program[p], mask)
+
+        for pub_name in pub_raw.unique():
+            mask = (pub_raw.values == pub_name)
+            by_publisher.setdefault(pub_name, _blank_counts())
+            _bump(by_publisher[pub_name], mask)
+            for p in programs:
+                pmask = mask & (prog.values == p)
+                if pmask.any():
+                    by_program_publisher[p].setdefault(pub_name, _blank_counts())
+                    _bump(by_program_publisher[p][pub_name], pmask)
+
+    return {
+        "by_program": by_program,
+        "by_publisher": by_publisher,
+        "by_program_publisher": by_program_publisher,
+    }
