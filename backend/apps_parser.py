@@ -38,6 +38,7 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
                             date_range: Dict[str, Any] = None) -> Dict[str, Any]:
     """Returns {"by_program": {...}, "by_publisher": {...}, "by_program_publisher": {prog: {pub: {...}}}}."""
     programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
+    program_aliases = settings.get("program_aliases") or {}
     api_pat = [p.upper() for p in settings.get("api_patterns", ["API"])]
     redir_pat = [p.upper() for p in settings.get("redirect_patterns", ["REDIRECT", "PUSH", "WIDGET"])]
     code_field = settings.get("application_code_field_apps")
@@ -102,7 +103,7 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
             col = lut.get(cand.strip().lower())
             if col is None or not df[col].notna().any():
                 continue
-            ps = program_series(df[col], programs)
+            ps = program_series(df[col], programs, program_aliases)
             matched = int(ps.notna().sum())
             if matched > best_matched:
                 best_matched, prog = matched, ps

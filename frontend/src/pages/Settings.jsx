@@ -26,6 +26,7 @@ export default function Settings() {
     try {
       const payload = {
         programs: s.programs,
+        program_aliases: s.program_aliases,
         verified_logic: s.verified_logic,
         relevant_stages: s.relevant_stages,
         api_patterns: s.api_patterns,
@@ -47,6 +48,12 @@ export default function Settings() {
   const toggleCourse = (name) => {
     const cur = s.programs || [];
     setS({ ...s, programs: cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name] });
+  };
+  const setAlias = (prog, text) => {
+    const list = text.split(",").map((x) => x.trim()).filter(Boolean);
+    const aliases = { ...(s.program_aliases || {}) };
+    if (list.length) aliases[prog] = list; else delete aliases[prog];
+    setS({ ...s, program_aliases: aliases });
   };
   const togglePublisher = (name) => {
     const inc = s.included_publishers || [];
@@ -86,6 +93,26 @@ export default function Settings() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {(s.programs || []).length > 0 && (
+          <div className="border-t border-slate-100 pt-5">
+            <Label className="text-sm font-semibold text-slate-700">Program aliases</Label>
+            <p className="text-xs text-slate-400 mb-2">
+              Merge other raw CRM course text into a program above instead of it showing as its own column
+              — e.g. "PGDM(MKT/FIN/HR/BA/IA)" as an alias of "PGDM" folds those leads into the PGDM total.
+            </p>
+            <div className="space-y-2">
+              {s.programs.map((p) => (
+                <div key={p} className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-600 w-28 shrink-0 truncate" title={p}>{p}</span>
+                  <Input data-testid={`alias-${p}`} value={(s.program_aliases?.[p] || []).join(", ")}
+                         onChange={(e) => setAlias(p, e.target.value)}
+                         placeholder="Other raw course text to merge in, comma-separated" className="text-sm" />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

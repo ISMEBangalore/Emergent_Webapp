@@ -16,6 +16,7 @@ import pandas as pd
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "programs": ["B.Com", "BBA", "PGDM"],
+    "program_aliases": {},              # e.g. {"PGDM": ["PGDM(MKT/FIN/HR/BA/IA)"]}
     "stage_rows": [
         "APPLIED",
         "COLD Unverified leads",
@@ -102,21 +103,37 @@ def _find_col(df: pd.DataFrame, candidates: List[str], prefer_data: bool = False
     return matches[0]
 
 
-def program_series(series: pd.Series, programs: List[str]) -> pd.Series:
+def _alnum(s: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", str(s).upper())
+
+
+def program_series(series: pd.Series, programs: List[str],
+                   aliases: Dict[str, List[str]] = None) -> pd.Series:
     """Map a Course/Programme column to one of the configured program names.
-    Exact (alnum) match first; substring fallback only for programs that have
+    Exact (alnum) match first; substring fallback only for match keys that have
     no exact match anywhere (e.g. short canonical names like B.Com/PGDM),
-    so selecting a full raw course name stays precise and never double-counts."""
+    so selecting a full raw course name stays precise and never double-counts.
+
+    `aliases` lets a program absorb other raw CRM text values that should
+    count toward it (e.g. {"PGDM": ["PGDM(MKT/FIN/HR/BA/IA)"]}) without
+    listing them as separate program columns."""
+    aliases = aliases or {}
     up = series.astype("string").fillna("")
     key = up.str.upper().str.replace(r"[^A-Z0-9]", "", regex=True)
     out = pd.Series([None] * len(series), index=series.index, dtype="object")
-    prog_keys = [(p, re.sub(r"[^A-Z0-9]", "", str(p).upper())) for p in programs]
-    for p, pk in prog_keys:
-        if pk:
-            out = out.mask(out.isna() & (key == pk), p)
-    for p, pk in prog_keys:
-        if pk and not (key == pk).any():
-            out = out.mask(out.isna() & (key != "") & key.str.contains(re.escape(pk), regex=True), p)
+
+    prog_match_keys: Dict[str, List[str]] = {}
+    for p in programs:
+        keys = [_alnum(p)] + [_alnum(a) for a in aliases.get(p, [])]
+        prog_match_keys[p] = list(dict.fromkeys(k for k in keys if k))  # dedup, keep order
+
+    for p in programs:
+        for mk in prog_match_keys[p]:
+            out = out.mask(out.isna() & (key == mk), p)
+    for p in programs:
+        for mk in prog_match_keys[p]:
+            if not (key == mk).any():
+                out = out.mask(out.isna() & (key != "") & key.str.contains(re.escape(mk), regex=True), p)
     return out
 
 
@@ -140,6 +157,7 @@ def compute_report(
 ) -> Dict[str, Any]:
     cfg = {**DEFAULT_SETTINGS, **(settings or {})}
     programs: List[str] = cfg["programs"]
+    program_aliases: Dict[str, List[str]] = cfg.get("program_aliases") or {}
     stage_rows: List[str] = cfg["stage_rows"]
     amount_spent = amount_spent or {}
     additional_attributed = additional_attributed or {}
@@ -216,7 +234,7 @@ def compute_report(
 
     # ---- Program (vectorised) ----
     if col_prog is not None:
-        prog = program_series(df[col_prog], programs)
+        prog = program_series(df[col_prog], programs, program_aliases)
     else:
         prog = pd.Series([None] * n, index=df.index, dtype="object")
     # Fallback via widget / payment where program still unknown

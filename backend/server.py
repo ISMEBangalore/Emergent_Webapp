@@ -142,6 +142,7 @@ async def root():
 # ---------------- Settings ----------------
 class SettingsIn(BaseModel):
     programs: Optional[List[str]] = None
+    program_aliases: Optional[Dict[str, List[str]]] = None
     verified_logic: Optional[str] = None
     relevant_stages: Optional[List[str]] = None
     api_patterns: Optional[List[str]] = None
