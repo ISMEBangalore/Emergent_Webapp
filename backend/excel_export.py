@@ -34,10 +34,10 @@ def _is_empty_breakdown(result: Dict[str, Any]) -> bool:
     return not programs or (len(programs) == 1 and programs[0] == "Unknown")
 
 
-def _total_leads(result: Dict[str, Any]) -> float:
-    summary = (result or {}).get("summary") or []
-    if summary and summary[0].get("label") == "Total Leads":
-        return summary[0].get("total") or 0
+def _total_applications(result: Dict[str, Any]) -> float:
+    for s in (result or {}).get("summary") or []:
+        if s.get("label") == "Total No. of Applications":
+            return s.get("total") or 0
     return 0
 
 
@@ -145,12 +145,12 @@ def build_workbook(doc: Dict[str, Any], top_publishers: int = 0) -> bytes:
         ws2 = wb.create_sheet(_sheet_name(f"Publisher - {key}"))
         _write_report_sheet(ws2, pub, f"By Publisher — {key}")
 
-    # Optional: program breakdown for the top N publishers by lead volume (the
-    # "Programs per Publisher" dashboard tab). Unbounded by default, so it's opt-in.
+    # Optional: program breakdown for the top N publishers by application volume
+    # (the "Programs per Publisher" dashboard tab). Unbounded by default, opt-in.
     if top_publishers > 0:
         prog_reports = result.get("program_reports") or {}
         candidates = [(k, v) for k, v in prog_reports.items() if k != "All" and not _is_empty_breakdown(v)]
-        candidates.sort(key=lambda kv: -_total_leads(kv[1]))
+        candidates.sort(key=lambda kv: -_total_applications(kv[1]))
         for pub_name, prog in candidates[:top_publishers]:
             ws3 = wb.create_sheet(_sheet_name(f"Programs - {pub_name}"))
             _write_report_sheet(ws3, prog, f"Programs per Publisher — {pub_name}")
