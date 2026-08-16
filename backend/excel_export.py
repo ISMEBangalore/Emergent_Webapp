@@ -22,17 +22,23 @@ def _fill(hexcolor):
     return PatternFill(start_color=hexcolor, end_color=hexcolor, fill_type="solid")
 
 
-def build_workbook(doc: Dict[str, Any]) -> bytes:
-    result = doc["result"]
+def _sheet_name(name: str) -> str:
+    """Excel sheet names must be <=31 chars and can't contain []:*?/\\."""
+    for ch in "[]:*?/\\":
+        name = name.replace(ch, "-")
+    return name[:31] or "Sheet"
+
+
+def _is_empty_breakdown(result: Dict[str, Any]) -> bool:
+    programs = (result or {}).get("programs") or []
+    return not programs or (len(programs) == 1 and programs[0] == "Unknown")
+
+
+def _write_report_sheet(ws, result: Dict[str, Any], title: str) -> None:
     programs = result["programs"]
     ncols = 2 + len(programs) * 2 + 1  # label + (prog,%)*n + Total
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Weekly Report"
-
     # Title
-    title = doc.get("week_label") or "Weekly CRM Report"
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
     c = ws.cell(row=1, column=1, value=title)
     c.font = Font(bold=True, size=14)
@@ -113,6 +119,24 @@ def build_workbook(doc: Dict[str, Any]) -> bytes:
     for i in range(2, ncols + 1):
         ws.column_dimensions[get_column_letter(i)].width = 11
     ws.freeze_panes = "B3"
+
+
+def build_workbook(doc: Dict[str, Any]) -> bytes:
+    result = doc["result"]
+    title = doc.get("week_label") or "Weekly CRM Report"
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Weekly Report"
+    _write_report_sheet(ws, result, title)
+
+    # One sheet per program's publisher breakdown (the "By Publisher" dashboard tab),
+    # so the export covers what's shown on screen, not just the program summary.
+    for key, pub in (result.get("publisher_reports") or {}).items():
+        if _is_empty_breakdown(pub):
+            continue
+        ws2 = wb.create_sheet(_sheet_name(f"Publisher - {key}"))
+        _write_report_sheet(ws2, pub, f"By Publisher — {key}")
 
     buf = io.BytesIO()
     wb.save(buf)
