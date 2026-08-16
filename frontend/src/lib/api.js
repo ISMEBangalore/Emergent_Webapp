@@ -61,6 +61,6 @@ export const api = {
   createView: (body) => client.post("/views", body).then((r) => r.data),
   deleteView: (id) => client.delete(`/views/${id}`).then((r) => r.data),
   getCumulative: (params) => client.get("/reports/cumulative", { params }).then((r) => r.data),
-  downloadReport: (id) => download(`/reports/${id}/export`, {}, "report.xlsx"),
+  downloadReport: (id, params = {}) => download(`/reports/${id}/export`, params, "report.xlsx"),
   downloadCumulative: (params) => download("/reports/cumulative/export", params, "report_range.xlsx"),
 };

@@ -374,9 +374,9 @@ async def cumulative_report(start: Optional[str] = None, end: Optional[str] = No
 
 
 @api_router.get("/reports/cumulative/export")
-async def export_cumulative(start: Optional[str] = None, end: Optional[str] = None):
+async def export_cumulative(start: Optional[str] = None, end: Optional[str] = None, top_publishers: int = 0):
     doc = await _build_cumulative(start, end)
-    data = await asyncio.to_thread(build_workbook, doc)
+    data = await asyncio.to_thread(build_workbook, doc, top_publishers)
     return StreamingResponse(
         iter([data]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -481,11 +481,11 @@ async def update_publisher_amounts(report_id: str, payload: PublisherAmountUpdat
 
 
 @api_router.get("/reports/{report_id}/export")
-async def export_report(report_id: str):
+async def export_report(report_id: str, top_publishers: int = 0):
     doc = await db.reports.find_one({"id": report_id}, {"_id": 0})
     if not doc or doc.get("status") != "ready":
         raise HTTPException(404, "Report not ready")
-    data = await asyncio.to_thread(build_workbook, doc)
+    data = await asyncio.to_thread(build_workbook, doc, top_publishers)
     raw = (doc.get("week_label") or "report").replace(" ", "_")[:40]
     fname = "".join(ch for ch in raw if ord(ch) < 128) or "report"
     fname += ".xlsx"

@@ -6,6 +6,7 @@ import { KpiCards } from "@/components/KpiCards";
 import { StatusBadge } from "@/pages/Dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { DownloadSimple, ArrowLeft, Warning, FloppyDisk, Info, ArrowsClockwise, CalendarBlank, BookmarkSimple, Trash } from "@phosphor-icons/react";
 
@@ -24,6 +25,7 @@ export default function ReportView() {
   const [regen, setRegen] = useState(false);
   const [views, setViews] = useState([]);
   const [viewName, setViewName] = useState("");
+  const [topPublishers, setTopPublishers] = useState("0");
 
   const fetchDoc = useCallback(async () => {
     const d = await api.getReport(id);
@@ -172,13 +174,30 @@ export default function ReportView() {
           </div>
           <p className="text-slate-500 mt-1">{doc.week_date} · Source file: {doc.lead_filename}</p>
         </div>
-        <Button
-          data-testid="export-btn"
-          className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2"
-          onClick={() => api.downloadReport(id).catch(() => toast.error("Could not download the export."))}
-        >
-          <DownloadSimple size={18} weight="bold" /> Export to Excel
-        </Button>
+        <div className="flex items-end gap-2">
+          <div>
+            <label className="text-xs uppercase tracking-wide text-slate-500">Programs per publisher</label>
+            <Select value={topPublishers} onValueChange={setTopPublishers}>
+              <SelectTrigger data-testid="export-top-publishers" className="mt-1 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Off</SelectItem>
+                <SelectItem value="5">Top 5 publishers</SelectItem>
+                <SelectItem value="10">Top 10 publishers</SelectItem>
+                <SelectItem value="15">Top 15 publishers</SelectItem>
+                <SelectItem value="20">Top 20 publishers</SelectItem>
+                <SelectItem value="999">All publishers</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            data-testid="export-btn"
+            className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2"
+            onClick={() => api.downloadReport(id, { top_publishers: Number(topPublishers) })
+              .catch(() => toast.error("Could not download the export."))}
+          >
+            <DownloadSimple size={18} weight="bold" /> Export to Excel
+          </Button>
+        </div>
       </div>
 
       {doc.lead_file_id && (

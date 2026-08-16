@@ -6,6 +6,7 @@ import { KpiCards } from "@/components/KpiCards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { DownloadSimple, ArrowLeft, ChartLineUp, CalendarBlank } from "@phosphor-icons/react";
 
@@ -23,6 +24,7 @@ export default function CumulativeView() {
   const [loading, setLoading] = useState(true);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [topPublishers, setTopPublishers] = useState("0");
 
   const load = useCallback(async (s, e) => {
     setLoading(true);
@@ -62,13 +64,30 @@ export default function CumulativeView() {
           </div>
           <p className="text-slate-500 mt-1">Aggregate every weekly report in a date range — leave dates empty for all-time.</p>
         </div>
-        <Button
-          data-testid="export-cumulative-btn"
-          className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2"
-          onClick={() => api.downloadCumulative({ start, end }).catch(() => toast.error("Could not download the export."))}
-        >
-          <DownloadSimple size={18} weight="bold" /> Export to Excel
-        </Button>
+        <div className="flex items-end gap-2">
+          <div>
+            <label className="text-xs uppercase tracking-wide text-slate-500">Programs per publisher</label>
+            <Select value={topPublishers} onValueChange={setTopPublishers}>
+              <SelectTrigger data-testid="export-top-publishers" className="mt-1 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Off</SelectItem>
+                <SelectItem value="5">Top 5 publishers</SelectItem>
+                <SelectItem value="10">Top 10 publishers</SelectItem>
+                <SelectItem value="15">Top 15 publishers</SelectItem>
+                <SelectItem value="20">Top 20 publishers</SelectItem>
+                <SelectItem value="999">All publishers</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            data-testid="export-cumulative-btn"
+            className="bg-[#002FA7] hover:bg-[#002FA7]/90 gap-2"
+            onClick={() => api.downloadCumulative({ start, end, top_publishers: Number(topPublishers) })
+              .catch(() => toast.error("Could not download the export."))}
+          >
+            <DownloadSimple size={18} weight="bold" /> Export to Excel
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-md p-5 mb-6">
