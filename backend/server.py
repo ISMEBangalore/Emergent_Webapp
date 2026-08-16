@@ -225,6 +225,7 @@ async def create_report(
         "updated_at": now_iso(),
     }
     await db.reports.insert_one(doc)
+    await _purge_old_source_files(report_id)
     asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
                                  doc["amount_spent"], doc["additional_attributed"],
                                  date_range=date_range))
@@ -240,6 +241,33 @@ async def _read_gridfs(file_id: str) -> bytes:
     from bson import ObjectId
     stream = await fs_bucket.open_download_stream(ObjectId(file_id))
     return await stream.read()
+
+
+async def _delete_gridfs_files(file_ids: List[str]) -> None:
+    from bson import ObjectId
+    for fid in file_ids:
+        try:
+            await fs_bucket.delete(ObjectId(fid))
+        except Exception:
+            pass
+
+
+async def _purge_old_source_files(keep_report_id: str) -> None:
+    """The free Atlas tier caps out at 512MB and a single lead+application
+    upload can be ~100MB, so only the newest report's raw source files are
+    kept in GridFS. Older reports keep their computed results but lose the
+    ability to be re-sliced by date via /regenerate."""
+    cursor = db.reports.find(
+        {"id": {"$ne": keep_report_id}, "lead_file_id": {"$exists": True}},
+        {"id": 1, "lead_file_id": 1, "app_file_ids": 1},
+    )
+    async for old in cursor:
+        file_ids = [old["lead_file_id"]] + old.get("app_file_ids", [])
+        await _delete_gridfs_files(file_ids)
+        await db.reports.update_one(
+            {"id": old["id"]},
+            {"$unset": {"lead_file_id": "", "app_file_ids": ""}},
+        )
 
 
 @api_router.post("/reports/{report_id}/regenerate")
@@ -366,9 +394,13 @@ async def get_report(report_id: str):
 
 @api_router.delete("/reports/{report_id}")
 async def delete_report(report_id: str):
-    res = await db.reports.delete_one({"id": report_id})
-    if res.deleted_count == 0:
+    doc = await db.reports.find_one({"id": report_id}, {"lead_file_id": 1, "app_file_ids": 1})
+    if not doc:
         raise HTTPException(404, "Report not found")
+    await db.reports.delete_one({"id": report_id})
+    file_ids = ([doc["lead_file_id"]] if doc.get("lead_file_id") else []) + doc.get("app_file_ids", [])
+    if file_ids:
+        await _delete_gridfs_files(file_ids)
     return {"deleted": True}
 
 
