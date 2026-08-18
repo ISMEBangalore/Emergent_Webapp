@@ -202,11 +202,6 @@ async def create_report(
     app_bytes = [await f.read() for f in (application_files or [])]
 
     report_id = str(uuid.uuid4())
-    # Persist raw files in GridFS so the report can be re-sliced by date later.
-    lead_fid = await fs_bucket.upload_from_stream(f"{report_id}_lead.xlsx", lead_bytes)
-    app_fids = []
-    for i, ab in enumerate(app_bytes):
-        app_fids.append(await fs_bucket.upload_from_stream(f"{report_id}_app{i}.xlsx", ab))
     date_range = {"start": lead_start_date or None, "end": lead_end_date or None}
     doc = {
         "id": report_id,
@@ -216,8 +211,6 @@ async def create_report(
         "source": "upload",
         "lead_filename": lead_file.filename,
         "application_filenames": [f.filename for f in (application_files or [])],
-        "lead_file_id": str(lead_fid),
-        "app_file_ids": [str(x) for x in app_fids],
         "amount_spent": _parse_json_form(amount_spent),
         "additional_attributed": _parse_json_form(additional_attributed),
         "date_range": date_range,
@@ -226,10 +219,14 @@ async def create_report(
         "updated_at": now_iso(),
     }
     await db.reports.insert_one(doc)
-    await _purge_old_source_files(report_id)
+    # Crunching starts immediately on the bytes already in memory — it doesn't need the
+    # GridFS copy. That copy only exists for the later "regenerate by date" feature, so
+    # it's written in the background instead of making the user wait ~100MB of Atlas
+    # writes before the report even starts processing.
     asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
                                  doc["amount_spent"], doc["additional_attributed"],
                                  date_range=date_range))
+    asyncio.create_task(_store_source_files(report_id, lead_bytes, app_bytes))
     return {"id": report_id, "status": "processing"}
 
 
@@ -251,6 +248,23 @@ async def _delete_gridfs_files(file_ids: List[str]) -> None:
             await fs_bucket.delete(ObjectId(fid))
         except Exception:
             pass
+
+
+async def _store_source_files(report_id: str, lead_bytes: bytes, app_bytes: List[bytes]) -> None:
+    """Backs up the raw uploaded files to GridFS for later /regenerate use.
+    Runs independently of report processing — crunching never waits on this."""
+    try:
+        lead_fid = await fs_bucket.upload_from_stream(f"{report_id}_lead.xlsx", lead_bytes)
+        app_fids = []
+        for i, ab in enumerate(app_bytes):
+            app_fids.append(await fs_bucket.upload_from_stream(f"{report_id}_app{i}.xlsx", ab))
+        await db.reports.update_one(
+            {"id": report_id},
+            {"$set": {"lead_file_id": str(lead_fid), "app_file_ids": [str(x) for x in app_fids]}},
+        )
+        await _purge_old_source_files(report_id)
+    except Exception:
+        logger.exception("failed to store source files for report %s", report_id)
 
 
 async def _purge_old_source_files(keep_report_id: str) -> None:

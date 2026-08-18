@@ -75,7 +75,9 @@ def read_data_sheet(content: bytes) -> pd.DataFrame:
         wb.close()
     except Exception:
         best = 0
-    return pd.read_excel(io.BytesIO(content), engine="openpyxl", sheet_name=best)
+    # calamine (Rust) parses large .xlsx files roughly 5-6x faster than openpyxl's
+    # pure-Python parser — meaningful when uploads run 90-100MB.
+    return pd.read_excel(io.BytesIO(content), engine="calamine", sheet_name=best)
 
 
 def _norm(s: Any) -> str:
