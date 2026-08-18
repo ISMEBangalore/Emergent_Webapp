@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReportTable } from "@/components/ReportTable";
+import { GeoReportPanel } from "@/components/GeoReportPanel";
 
 const Chips = ({ options, value, onChange, testidPrefix, labelFor }) => (
   <div className="flex flex-wrap items-center gap-2 mb-3" data-testid={`${testidPrefix}-filter`}>
@@ -48,6 +49,9 @@ export const ReportTabs = ({ result, publisherPanel = null }) => {
         {byPublisher && !pubEmpty && (
           <TabsTrigger value="pub-program" data-testid="tab-pub-program">Programs per Publisher</TabsTrigger>
         )}
+        {result.geo_by_state && (
+          <TabsTrigger value="geography" data-testid="tab-geography">Geography</TabsTrigger>
+        )}
       </TabsList>
 
       <TabsContent value="program" className="mt-4">
@@ -78,6 +82,12 @@ export const ReportTabs = ({ result, publisherPanel = null }) => {
           <Chips options={publisherOptions} value={progPub} onChange={setProgPub}
                  testidPrefix="prog-pub" labelFor="Publisher" />
           <ReportTable result={progReport} />
+        </TabsContent>
+      )}
+
+      {result.geo_by_state && (
+        <TabsContent value="geography" className="mt-4">
+          <GeoReportPanel result={result} />
         </TabsContent>
       )}
     </Tabs>

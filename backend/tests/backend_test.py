@@ -321,7 +321,10 @@ class TestLeadPulseDynamicDimensions:
         assert exported.status_code == 200
         assert exported.content[:2] == b"PK"
         workbook = load_workbook(io.BytesIO(exported.content), read_only=True, data_only=True)
-        assert workbook.sheetnames == ["Weekly Report"]
+        # One "Weekly Report" summary sheet plus one "Publisher - <key>" sheet per
+        # publisher_reports entry (All + each program) — see excel_export.build_workbook.
+        assert set(workbook.sheetnames) == {"Weekly Report", "Publisher - All",
+                                            *(f"Publisher - {p}" for p in DEFAULT_PROGRAMS)}
 
     def test_08_single_export_trends_and_missing_report_errors(self, api_client):
         report_id = STATE["default_sample_id"]

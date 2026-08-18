@@ -7,12 +7,14 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from report_engine import _find_col, program_series, read_data_sheet
+from report_engine import _find_col, city_series, geo_series, program_series, read_data_sheet
 
 
 PROG_CANDS = ["Courses Preference", "Course Preference", "Course", "Programme", "Program"]
 ORIGIN_CANDS = ["Lead Origin", "Lead Origin(Primary)", "Primary Traffic Channel", "Publisher Name", "Publisher"]
 PUB_CANDS = ["Publisher", "Publisher Name"]
+STATE_CANDS = ["State"]
+CITY_CANDS = ["City"]
 # Discount / coupon code columns (a non-empty value => "application with code")
 CODE_CANDS = [
     "Discount Coupon", "Coupon Code", "Coupon", "Applied Coupon", "Coupon Applied",
@@ -36,7 +38,8 @@ def _blank_counts() -> Dict[str, int]:
 
 def parse_application_files(files: List[bytes], settings: Dict[str, Any],
                             date_range: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Returns {"by_program": {...}, "by_publisher": {...}, "by_program_publisher": {prog: {pub: {...}}}}."""
+    """Returns {"by_program": {...}, "by_publisher": {...}, "by_program_publisher": {prog: {pub: {...}}},
+    "by_state": {state: count}, "by_city": {city: count}, "by_program_state"/"by_program_city": {prog: {loc: count}}}."""
     programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
     program_aliases = settings.get("program_aliases") or {}
     api_pat = [p.upper() for p in settings.get("api_patterns", ["API"])]
@@ -49,6 +52,10 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
     by_program = {p: _blank_counts() for p in programs}
     by_publisher: Dict[str, Dict[str, int]] = {}
     by_program_publisher: Dict[str, Dict[str, Dict[str, int]]] = {p: {} for p in programs}
+    by_state: Dict[str, int] = {}
+    by_city: Dict[str, int] = {}
+    by_program_state: Dict[str, Dict[str, int]] = {p: {} for p in programs}
+    by_program_city: Dict[str, Dict[str, int]] = {p: {} for p in programs}
 
     def _bump(target: Dict[str, int], mask) -> None:
         target["with_code"] += int((mask & has_code.values).sum())
@@ -134,6 +141,11 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
         else:
             pub_raw = pd.Series(["Unknown"] * len(df), index=df.index, dtype="object")
 
+        col_state = _find_col(df, STATE_CANDS, prefer_data=True)
+        col_city = _find_col(df, CITY_CANDS, prefer_data=True)
+        state_raw = geo_series(df[col_state]) if col_state is not None else pd.Series(["UNKNOWN"] * len(df), index=df.index)
+        city_raw = city_series(df[col_city]) if col_city is not None else pd.Series(["UNKNOWN"] * len(df), index=df.index)
+
         for p in programs:
             mask = (prog.values == p)
             _bump(by_program[p], mask)
@@ -148,8 +160,28 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
                     by_program_publisher[p].setdefault(pub_name, _blank_counts())
                     _bump(by_program_publisher[p][pub_name], pmask)
 
+        for state_name in state_raw.unique():
+            mask = (state_raw.values == state_name)
+            by_state[state_name] = by_state.get(state_name, 0) + int(mask.sum())
+            for p in programs:
+                pmask = mask & (prog.values == p)
+                if pmask.any():
+                    by_program_state[p][state_name] = by_program_state[p].get(state_name, 0) + int(pmask.sum())
+
+        for city_name in city_raw.unique():
+            mask = (city_raw.values == city_name)
+            by_city[city_name] = by_city.get(city_name, 0) + int(mask.sum())
+            for p in programs:
+                pmask = mask & (prog.values == p)
+                if pmask.any():
+                    by_program_city[p][city_name] = by_program_city[p].get(city_name, 0) + int(pmask.sum())
+
     return {
         "by_program": by_program,
         "by_publisher": by_publisher,
+        "by_state": by_state,
+        "by_city": by_city,
+        "by_program_state": by_program_state,
+        "by_program_city": by_program_city,
         "by_program_publisher": by_program_publisher,
     }

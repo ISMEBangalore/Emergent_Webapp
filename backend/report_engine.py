@@ -52,6 +52,18 @@ ORIGIN_CANDIDATES = [
 WIDGET_CANDIDATES = ["Widget Name"]
 PAYMENT_CANDIDATES = ["Payment Approved"]
 PUBLISHER_CANDIDATES = ["Publisher Name", "Publisher", "Publisher(Primary)"]
+STATE_CANDIDATES = ["State", "Registered State"]
+CITY_CANDIDATES = ["City", "Registered City"]
+# The CRM's City field occasionally holds a district name rather than an actual city
+# (mainly for Delhi, which has no single "city" — it's NCT split into districts — and
+# a stray "Bengaluru Urban" district value). Folded into the city they actually mean.
+CITY_ALIASES = {
+    "BENGALURU URBAN": "BENGALURU", "BENGALURU RURAL": "BENGALURU",
+    "NEW DELHI": "DELHI", "NORTH DELHI": "DELHI", "SOUTH DELHI": "DELHI",
+    "EAST DELHI": "DELHI", "WEST DELHI": "DELHI", "CENTRAL DELHI": "DELHI",
+    "NORTH WEST DELHI": "DELHI", "NORTH EAST DELHI": "DELHI",
+    "SOUTH WEST DELHI": "DELHI", "SOUTH EAST DELHI": "DELHI", "SHAHDARA": "DELHI",
+}
 DATE_CANDIDATES = [
     "User Registration Date", "Registration Date", "Created On", "Lead Created Date",
     "Lead Creation Date", "Created Date", "Creation Date", "Lead Created On", "Created",
@@ -139,6 +151,23 @@ def program_series(series: pd.Series, programs: List[str],
     return out
 
 
+_GEO_UNKNOWN_TOKENS = {"", "NAN", "NONE", "N/A", "NA", "-", "NULL"}
+
+
+def geo_series(series: pd.Series) -> pd.Series:
+    """Normalize a State/City column: uppercase, trim, and fold the CRM's own
+    'STATE NOT AVAILABLE' / 'CITY NOT AVAILABLE' placeholders (and blanks) into
+    a single 'Unknown' bucket instead of scattering them as junk categories."""
+    v = series.astype("string").str.strip().str.upper().fillna("")
+    unknown = v.isin(_GEO_UNKNOWN_TOKENS) | v.str.contains("NOT AVAILABLE", na=False)
+    return v.mask(unknown, "UNKNOWN")
+
+
+def city_series(series: pd.Series) -> pd.Series:
+    v = geo_series(series)
+    return v.replace(CITY_ALIASES)
+
+
 def _prog_from_series(s: pd.Series) -> pd.Series:
     u = s.astype("string").str.upper().fillna("")
     out = pd.Series(np.where(u.str.contains("PGDM"), "PGDM",
@@ -170,6 +199,10 @@ def compute_report(
         p: {str(k).strip().upper(): v for k, v in (pubs or {}).items()}
         for p, pubs in (application_counts.get("by_program_publisher") or {}).items()
     }
+    apps_by_state = application_counts.get("by_state") or {}
+    apps_by_city = application_counts.get("by_city") or {}
+    apps_by_program_state = application_counts.get("by_program_state") or {}
+    apps_by_program_city = application_counts.get("by_program_city") or {}
     _blank_app_counts = {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0}
 
     df = read_data_sheet(lead_bytes)
@@ -231,6 +264,8 @@ def compute_report(
     col_payment = _find_col(df, PAYMENT_CANDIDATES)
     col_agent = _find_col(df, [cfg.get("application_code_field", "Agent Code")])
     col_pub = _find_col(df, PUBLISHER_CANDIDATES, prefer_data=True)
+    col_state = _find_col(df, STATE_CANDIDATES, prefer_data=True)
+    col_city = _find_col(df, CITY_CANDIDATES, prefer_data=True)
 
     all_cols = list(programs) + ["Other"]
 
@@ -292,6 +327,8 @@ def compute_report(
                          "bucket": bucket.values, "verified": verified.values})
     relevant_set = {s.upper() for s in cfg["relevant_stages"]}
     work["relevant"] = raw.isin(relevant_set).values
+    work["state"] = geo_series(df[col_state]).values if col_state is not None else "UNKNOWN"
+    work["city"] = city_series(df[col_city]).values if col_city is not None else "UNKNOWN"
 
     # ---- Channel kind (vectorised) ----
     if col_origin is not None:
@@ -384,6 +421,43 @@ def compute_report(
     )
     result["publisher_report"] = publisher_result
     result["publisher_reports"] = publisher_reports
+
+    # ---- Geography (State / City) ----
+    def make_geo_breakdown(frame: pd.DataFrame, colname: str, app_counts: Dict[str, int]) -> Dict[str, Any]:
+        g = frame.groupby(colname, observed=True)
+        leads = g.size()
+        verified_ct = g["verified"].sum()
+        relevant_ct = g["relevant"].sum()
+        out: Dict[str, Any] = {}
+        for name in leads.index:
+            key = str(name)
+            apps = int(app_counts.get(key, 0))
+            lead_n = int(leads[name])
+            out[key] = {
+                "leads": lead_n,
+                "verified_leads": int(verified_ct[name]),
+                "relevant_leads": int(relevant_ct[name]),
+                "applications": apps,
+                "conversion_pct": round(apps / lead_n * 100, 2) if lead_n else None,
+            }
+        # Locations with applications but zero matching leads (e.g. a state present
+        # only in the application file) still deserve a row.
+        for key, apps in app_counts.items():
+            if key not in out and apps:
+                out[key] = {"leads": 0, "verified_leads": 0, "relevant_leads": 0,
+                           "applications": int(apps), "conversion_pct": None}
+        return out
+
+    geo_by_state = {"All": make_geo_breakdown(work, "state", apps_by_state)}
+    geo_by_city = {"All": make_geo_breakdown(work, "city", apps_by_city)}
+    for prog_name in programs:
+        sub = work[work["prog"] == prog_name]
+        geo_by_state[prog_name] = make_geo_breakdown(sub, "state", apps_by_program_state.get(prog_name, {}))
+        geo_by_city[prog_name] = make_geo_breakdown(sub, "city", apps_by_program_city.get(prog_name, {}))
+    result["geo_by_state"] = geo_by_state
+    result["geo_by_city"] = geo_by_city
+    result["data_quality"]["state_column_present"] = bool(col_state)
+    result["data_quality"]["city_column_present"] = bool(col_city)
     result["data_quality"]["available_courses"] = available_courses
     result["data_quality"]["available_publishers"] = available_publishers
 
@@ -616,4 +690,31 @@ def aggregate_reports(reports, settings):
             prog_reports[pub_name] = pr
     if len(prog_reports) > 1:
         result["program_reports"] = prog_reports
+
+    # Geography cumulative (overall + per program): sum matching locations across weeks.
+    def geo_cumulative(key: str) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        for prog_key in ["All"] + programs:
+            merged: Dict[str, Dict[str, Any]] = {}
+            for r in reports:
+                geo = ((r.get("result") or {}).get(key) or {}).get(prog_key) or {}
+                for loc, vals in geo.items():
+                    m = merged.setdefault(loc, {"leads": 0, "verified_leads": 0,
+                                               "relevant_leads": 0, "applications": 0})
+                    m["leads"] += vals.get("leads", 0) or 0
+                    m["verified_leads"] += vals.get("verified_leads", 0) or 0
+                    m["relevant_leads"] += vals.get("relevant_leads", 0) or 0
+                    m["applications"] += vals.get("applications", 0) or 0
+            for m in merged.values():
+                m["conversion_pct"] = round(m["applications"] / m["leads"] * 100, 2) if m["leads"] else None
+            if merged:
+                out[prog_key] = merged
+        return out
+
+    geo_state = geo_cumulative("geo_by_state")
+    if geo_state:
+        result["geo_by_state"] = geo_state
+    geo_city = geo_cumulative("geo_by_city")
+    if geo_city:
+        result["geo_by_city"] = geo_city
     return result
