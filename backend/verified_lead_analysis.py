@@ -1,0 +1,209 @@
+"""Verified-Lead -> Application -> Admission -> Joined funnel, broken down by
+publisher and program.
+
+Two data sources feed this, on purpose kept separate:
+  - Total Leads / Verified Leads come straight from each report's already-
+    computed result.publisher_reports[program] (built by report_engine.py at
+    upload time) — no need to reparse raw files.
+  - Application / Admission Fee Paid / Joined come from a compact per-
+    applicant index (see extract_applicant_records) stored in its own Mongo
+    collection, keyed by Application No, so a later "final students who
+    reported" upload can be matched against it by Application No or Name —
+    the CRM's own Enrolment Status field isn't kept up to date, so it can't
+    be trusted for "Joined"."""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+
+from report_engine import _find_col, program_series, read_data_sheet
+
+PROG_CANDS = ["Courses Preference", "Course Preference", "Course", "Programme", "Program"]
+PUB_CANDS = ["Publisher", "Publisher Name"]
+PAY_STATUS_CANDS = ["Payment Status", "Payment Approval Status", "Payment Approved"]
+ADM_FEE_STATUS_CANDS = ["Admission Fee Status"]
+APP_NO_CANDS = ["Application No", "Application Number", "Application No."]
+NAME_CANDS = ["Registered Name", "Applicant Name", "Full Name", "Student Name", "Name"]
+APP_DATE_CANDS = [
+    "Registration Date", "User Registration Date", "Created On", "Application Date",
+    "Created Date", "Payment Date", "Date",
+]
+
+
+def _norm(series: pd.Series) -> pd.Series:
+    return series.astype("string").str.strip().str.upper().fillna("")
+
+
+def _norm_name(series: pd.Series) -> pd.Series:
+    # Collapse repeated internal whitespace so "JOHN  DOE" and "JOHN DOE" match.
+    return _norm(series).str.replace(r"\s+", " ", regex=True)
+
+
+def extract_applicant_records(files: List[bytes], settings: Dict[str, Any],
+                              date_range: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    """One record per payment-approved application: the compact index that
+    the funnel table and the later Joined-students matcher both read from."""
+    programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
+    program_aliases = settings.get("program_aliases") or {}
+    date_range = date_range or {}
+    d_start = (str(date_range.get("start") or "")).strip() or None
+    d_end = (str(date_range.get("end") or "")).strip() or None
+
+    records: List[Dict[str, Any]] = []
+
+    for content in files:
+        try:
+            df = read_data_sheet(content)
+        except Exception:
+            continue
+        if len(df) == 0:
+            continue
+
+        if d_start or d_end:
+            col_date = _find_col(df, APP_DATE_CANDS, prefer_data=True)
+            if col_date is not None:
+                parsed = pd.to_datetime(df[col_date], errors="coerce", dayfirst=True)
+                keep = pd.Series(True, index=df.index)
+                if d_start:
+                    keep &= parsed >= pd.Timestamp(d_start)
+                if d_end:
+                    keep &= parsed < (pd.Timestamp(d_end) + pd.Timedelta(days=1))
+                df = df[keep.fillna(False)].reset_index(drop=True)
+                if len(df) == 0:
+                    continue
+
+        col_pay = _find_col(df, PAY_STATUS_CANDS, prefer_data=True)
+        if col_pay is None:
+            continue
+        paid = df[col_pay].astype("string").str.strip().str.upper().eq("PAYMENT APPROVED").fillna(False)
+        df = df[paid].reset_index(drop=True)
+        if len(df) == 0:
+            continue
+
+        col_appno = _find_col(df, APP_NO_CANDS, prefer_data=True)
+        col_name = _find_col(df, NAME_CANDS, prefer_data=True)
+        if col_appno is None and col_name is None:
+            continue  # nothing to match a Joined-students list against
+
+        lut = {c.strip().lower(): c for c in df.columns}
+        prog = None
+        best_matched = -1
+        for cand in PROG_CANDS:
+            col = lut.get(cand.strip().lower())
+            if col is None or not df[col].notna().any():
+                continue
+            ps = program_series(df[col], programs, program_aliases)
+            matched = int(ps.notna().sum())
+            if matched > best_matched:
+                best_matched, prog = matched, ps
+        if prog is None:
+            prog = pd.Series([None] * len(df), index=df.index)
+
+        col_pub = _find_col(df, PUB_CANDS, prefer_data=True)
+        publisher = _norm(df[col_pub]) if col_pub is not None else pd.Series(["UNKNOWN"] * len(df), index=df.index)
+        publisher = publisher.where(publisher != "", "UNKNOWN")
+
+        col_adm = _find_col(df, ADM_FEE_STATUS_CANDS, prefer_data=True)
+        admitted = (df[col_adm].astype("string").str.strip().str.upper().eq("PAID").fillna(False)
+                   if col_adm is not None else pd.Series(False, index=df.index))
+
+        app_no = _norm(df[col_appno]) if col_appno is not None else pd.Series([""] * len(df), index=df.index)
+        name = _norm_name(df[col_name]) if col_name is not None else pd.Series([""] * len(df), index=df.index)
+
+        for i in range(len(df)):
+            p = prog.values[i]
+            if p is None:
+                continue
+            records.append({
+                "app_no": app_no.iloc[i], "name": name.iloc[i],
+                "publisher": publisher.iloc[i], "program": p,
+                "admission_paid": bool(admitted.iloc[i]), "joined": False,
+            })
+
+    return records
+
+
+def _blank_row() -> Dict[str, Any]:
+    return {"total_leads": 0, "verified_leads": 0, "application": 0, "admission_fee_paid": 0, "joined": 0}
+
+
+def build_funnel(reports: List[Dict[str, Any]], applicant_records: List[Dict[str, Any]],
+                 programs: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    """reports: list of stored report docs (need .result.publisher_reports).
+    applicant_records: rows from the applicant_records collection for the same range.
+    Returns {program: [ {publisher, total_leads, verified_leads, application,
+                         admission_fee_paid, joined}, ... ]}"""
+    out: Dict[str, Dict[str, Dict[str, Any]]] = {p: {} for p in programs}
+
+    for r in reports:
+        pub_reports = ((r.get("result") or {}).get("publisher_reports") or {})
+        for p in programs:
+            pr = pub_reports.get(p)
+            if not pr:
+                continue
+            summary = {s.get("label"): s for s in pr.get("summary", [])}
+            total_row = summary.get("Total Leads", {}).get("values", {})
+            verified_row = summary.get("Verified Leads", {}).get("values", {})
+            for pub_name in pr.get("programs", []):  # publisher_reports uses "programs" as publisher columns
+                row = out[p].setdefault(pub_name, _blank_row())
+                row["total_leads"] += int(total_row.get(pub_name, 0) or 0)
+                row["verified_leads"] += int(verified_row.get(pub_name, 0) or 0)
+
+    for rec in applicant_records:
+        p, pub = rec.get("program"), rec.get("publisher") or "UNKNOWN"
+        if p not in out:
+            continue
+        row = out[p].setdefault(pub, _blank_row())
+        row["application"] += 1
+        if rec.get("admission_paid"):
+            row["admission_fee_paid"] += 1
+        if rec.get("joined"):
+            row["joined"] += 1
+
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for p in programs:
+        rows = [{"publisher": pub, **vals} for pub, vals in out[p].items()]
+        rows.sort(key=lambda r: -r["application"])
+        result[p] = rows
+    return result
+
+
+def match_joined_students(upload_bytes: bytes, records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Parses a 'final students who reported' file and marks matching
+    applicant_records as joined, preferring Application No, falling back to
+    Name. Returns which records matched (for a DB update) plus a summary."""
+    df = read_data_sheet(upload_bytes)
+    col_appno = _find_col(df, APP_NO_CANDS, prefer_data=True)
+    col_name = _find_col(df, NAME_CANDS, prefer_data=True)
+    if col_appno is None and col_name is None:
+        raise ValueError("Couldn't find an Application No or Name column in this file.")
+
+    upload_app_nos = set(_norm(df[col_appno])) if col_appno is not None else set()
+    upload_app_nos.discard("")
+    upload_names = set(_norm_name(df[col_name])) if col_name is not None else set()
+    upload_names.discard("")
+
+    by_appno = {r["app_no"]: r for r in records if r.get("app_no")}
+    by_name = {r["name"]: r for r in records if r.get("name")}
+
+    matched_ids: List[Any] = []
+    matched_keys = set()
+    for app_no in upload_app_nos:
+        r = by_appno.get(app_no)
+        if r is not None:
+            matched_ids.append(r["_id"])
+            matched_keys.add(("appno", app_no))
+    unmatched_by_appno = upload_app_nos - {k[1] for k in matched_keys}
+    for name in upload_names & set(by_name.keys()):
+        r = by_name[name]
+        if r["_id"] not in matched_ids:
+            matched_ids.append(r["_id"])
+
+    total_upload_rows = len(df)
+    return {
+        "matched_ids": matched_ids,
+        "matched_count": len(matched_ids),
+        "total_upload_rows": total_upload_rows,
+        "unmatched_by_appno_count": len(unmatched_by_appno) if col_appno is not None else None,
+    }

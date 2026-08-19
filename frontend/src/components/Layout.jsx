@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { ChartBar, UploadSimple, ClockCounterClockwise, GearSix, GraduationCap, List, X, ArrowsDownUp, ChartLineUp, SignOut, Lightbulb } from "@phosphor-icons/react";
+import { ChartBar, UploadSimple, ClockCounterClockwise, GearSix, GraduationCap, List, X, ArrowsDownUp, ChartLineUp, SignOut, Lightbulb, FunnelSimple } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 
 const nav = [
@@ -9,6 +9,7 @@ const nav = [
   { to: "/compare", label: "Week Compare", icon: ArrowsDownUp, testid: "nav-compare" },
   { to: "/latest", label: "Report Till Date", icon: ChartLineUp, testid: "nav-cumulative" },
   { to: "/insights", label: "Application Insight", icon: Lightbulb, testid: "nav-insights" },
+  { to: "/verified-leads", label: "Verified Lead Analysis", icon: FunnelSimple, testid: "nav-verified-leads" },
   { to: "/history", label: "History", icon: ClockCounterClockwise, testid: "nav-history" },
   { to: "/settings", label: "Settings", icon: GearSix, testid: "nav-settings" },
 ];

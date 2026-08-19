@@ -65,4 +65,16 @@ export const api = {
   downloadCumulative: (params) => download("/reports/cumulative/export", params, "report_range.xlsx"),
   getInsights: (params) => client.get("/insights", { params }).then((r) => r.data),
   getAiInsight: (params) => client.post("/insights/ai", null, { params, timeout: 60000 }).then((r) => r.data),
+  getVerifiedLeadAnalysis: (params) => client.get("/verified-lead-analysis", { params }).then((r) => r.data),
+  uploadJoinedStudents: (formData, params = {}) =>
+    client
+      .post("/verified-lead-analysis/joined-upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        params,
+      })
+      .then((r) => r.data),
+  listSeasons: () => client.get("/seasons").then((r) => r.data),
+  createSeason: (body) => client.post("/seasons", body).then((r) => r.data),
+  deleteSeason: (id) => client.delete(`/seasons/${id}`).then((r) => r.data),
+  getSeasonAnalysis: (id) => client.get(`/seasons/${id}/verified-lead-analysis`).then((r) => r.data),
 };

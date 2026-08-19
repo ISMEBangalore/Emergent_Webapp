@@ -22,6 +22,7 @@ from auth import TokenData, bootstrap_admin, create_access_token, get_current_us
 from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports
 from apps_parser import parse_application_files
 from application_insights import evaluate_alerts, merge_buckets, parse_insights, summarize_bucket
+from verified_lead_analysis import build_funnel, extract_applicant_records, match_joined_students
 from excel_export import build_workbook
 
 mongo_url = os.environ["MONGO_URL"]
@@ -80,14 +81,17 @@ async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
                    settings: Dict[str, Any], amount_spent: Dict[str, float],
                    additional_attributed: Dict[str, float],
                    preset_app_counts: Optional[Dict[str, Any]] = None,
-                   date_range: Optional[Dict[str, str]] = None):
+                   date_range: Optional[Dict[str, str]] = None,
+                   week_date: Optional[str] = None):
     try:
         if preset_app_counts is not None:
             app_counts = preset_app_counts
             insight_buckets = None
+            applicant_records = None
         else:
             app_counts = await asyncio.to_thread(parse_application_files, app_files, settings, date_range) if app_files else {}
             insight_buckets = await asyncio.to_thread(parse_insights, app_files, settings, date_range) if app_files else None
+            applicant_records = await asyncio.to_thread(extract_applicant_records, app_files, settings, date_range) if app_files else None
         result = await asyncio.to_thread(
             compute_report, lead_bytes, settings, amount_spent, additional_attributed, app_counts, date_range
         )
@@ -96,6 +100,13 @@ async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
         if insight_buckets is not None:
             update["insight_buckets"] = insight_buckets
         await db.reports.update_one({"id": report_id}, {"$set": update})
+        # applicant_records lives in its own collection (not the report doc) so the Joined-
+        # students upload can update individual records by _id without rewriting the report.
+        await db.applicant_records.delete_many({"report_id": report_id})
+        if applicant_records:
+            await db.applicant_records.insert_many([
+                {**r, "report_id": report_id, "week_date": week_date} for r in applicant_records
+            ])
     except Exception as e:  # noqa
         logger.exception("report processing failed")
         await db.reports.update_one(
@@ -228,7 +239,7 @@ async def create_report(
     # writes before the report even starts processing.
     asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
                                  doc["amount_spent"], doc["additional_attributed"],
-                                 date_range=date_range))
+                                 date_range=date_range, week_date=week_date))
     asyncio.create_task(_store_source_files(report_id, lead_bytes, app_bytes))
     return {"id": report_id, "status": "processing"}
 
@@ -304,7 +315,7 @@ async def regenerate_report(report_id: str, payload: RegenerateIn):
                                           "date_range": date_range, "updated_at": now_iso()}})
     asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
                                  doc.get("amount_spent", {}), doc.get("additional_attributed", {}),
-                                 date_range=date_range))
+                                 date_range=date_range, week_date=doc.get("week_date")))
     return {"id": report_id, "status": "processing"}
 
 
@@ -532,6 +543,7 @@ async def delete_report(report_id: str):
     file_ids = ([doc["lead_file_id"]] if doc.get("lead_file_id") else []) + doc.get("app_file_ids", [])
     if file_ids:
         await _delete_gridfs_files(file_ids)
+    await db.applicant_records.delete_many({"report_id": report_id})
     return {"deleted": True}
 
 
@@ -668,6 +680,140 @@ async def delete_view(view_id: str):
     if res.deleted_count == 0:
         raise HTTPException(404, "View not found")
     return {"deleted": True}
+
+
+# ---------------- Verified Lead Analysis ----------------
+async def _build_verified_lead_analysis(start: Optional[str] = None, end: Optional[str] = None) -> Dict[str, Any]:
+    """Publisher x program funnel: Total Leads / Verified Leads (from each report's
+    already-computed publisher_reports) summed against Application / Admission Fee
+    Paid / Joined (from the applicant_records collection) for reports whose week
+    falls in range. Always recomputed live from current data — never a frozen
+    snapshot — so a saved season stays accurate as more weeks are uploaded into it."""
+    start = _validate_date(start, "start")
+    end = _validate_date(end, "end")
+    if start and end and start > end:
+        raise HTTPException(400, "start date must be on or before end date.")
+    settings = await get_settings()
+    programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
+
+    reports = await db.reports.find(
+        {"status": "ready", "result.publisher_reports": {"$exists": True}},
+        {"_id": 0, "result.publisher_reports": 1, "week_date": 1},
+    ).to_list(2000)
+
+    def in_range(wd):
+        wd = wd or ""
+        if start and wd < start:
+            return False
+        if end and wd > end:
+            return False
+        return True
+
+    reports = [r for r in reports if in_range(r.get("week_date"))]
+
+    rec_query: Dict[str, Any] = {}
+    wd_q: Dict[str, Any] = {}
+    if start:
+        wd_q["$gte"] = start
+    if end:
+        wd_q["$lte"] = end
+    if wd_q:
+        rec_query["week_date"] = wd_q
+    records = await db.applicant_records.find(rec_query, {"_id": 0}).to_list(50000)
+
+    funnel = await asyncio.to_thread(build_funnel, reports, records, programs)
+    return {
+        "programs": programs,
+        "funnel": funnel,
+        "reports_included": len(reports),
+        "applications_included": len(records),
+        "date_range": {"start": start, "end": end},
+    }
+
+
+@api_router.get("/verified-lead-analysis")
+async def verified_lead_analysis(start: Optional[str] = None, end: Optional[str] = None):
+    return await _build_verified_lead_analysis(start, end)
+
+
+@api_router.post("/verified-lead-analysis/joined-upload")
+async def upload_joined_students(
+    file: UploadFile = File(...),
+    start: Optional[str] = Form(None),
+    end: Optional[str] = Form(None),
+):
+    """Marks applicant_records as joined by matching an uploaded 'final students
+    who reported' file against Application No (preferred) or Name. The CRM's own
+    Enrolment Status field isn't kept up to date, so it can't be trusted for this —
+    this upload is the only source of truth for who actually joined."""
+    start = _validate_date(start, "start")
+    end = _validate_date(end, "end")
+    upload_bytes = await file.read()
+
+    rec_query: Dict[str, Any] = {}
+    wd_q: Dict[str, Any] = {}
+    if start:
+        wd_q["$gte"] = start
+    if end:
+        wd_q["$lte"] = end
+    if wd_q:
+        rec_query["week_date"] = wd_q
+    records = await db.applicant_records.find(rec_query, {"app_no": 1, "name": 1}).to_list(50000)
+
+    try:
+        result = await asyncio.to_thread(match_joined_students, upload_bytes, records)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    matched_ids = result.pop("matched_ids", [])
+    if matched_ids:
+        await db.applicant_records.update_many({"_id": {"$in": matched_ids}}, {"$set": {"joined": True}})
+    return result
+
+
+# ---------------- Seasons (named, live-recomputing Verified Lead Analysis ranges) ----------------
+class SeasonIn(BaseModel):
+    label: str
+    start: Optional[str] = None
+    end: Optional[str] = None
+
+
+@api_router.get("/seasons")
+async def list_seasons():
+    return await db.seasons.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api_router.post("/seasons")
+async def create_season(payload: SeasonIn):
+    label = (payload.label or "").strip()
+    if not label:
+        raise HTTPException(400, "Season label is required.")
+    doc = {
+        "id": str(uuid.uuid4()), "label": label,
+        "start": _validate_date(payload.start, "start"), "end": _validate_date(payload.end, "end"),
+        "created_at": now_iso(),
+    }
+    await db.seasons.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.delete("/seasons/{season_id}")
+async def delete_season(season_id: str):
+    res = await db.seasons.delete_one({"id": season_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Season not found")
+    return {"deleted": True}
+
+
+@api_router.get("/seasons/{season_id}/verified-lead-analysis")
+async def season_verified_lead_analysis(season_id: str):
+    season = await db.seasons.find_one({"id": season_id}, {"_id": 0})
+    if not season:
+        raise HTTPException(404, "Season not found")
+    data = await _build_verified_lead_analysis(season.get("start"), season.get("end"))
+    data["season"] = season
+    return data
 
 
 app.include_router(auth_router)
