@@ -77,4 +77,6 @@ export const api = {
   createSeason: (body) => client.post("/seasons", body).then((r) => r.data),
   deleteSeason: (id) => client.delete(`/seasons/${id}`).then((r) => r.data),
   getSeasonAnalysis: (id) => client.get(`/seasons/${id}/verified-lead-analysis`).then((r) => r.data),
+  freezeSeason: (id) => client.post(`/seasons/${id}/freeze`).then((r) => r.data),
+  unfreezeSeason: (id) => client.post(`/seasons/${id}/unfreeze`).then((r) => r.data),
 };

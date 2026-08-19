@@ -14,6 +14,7 @@ import CumulativeView from "@/pages/CumulativeView";
 import Latest from "@/pages/Latest";
 import ApplicationInsight from "@/pages/ApplicationInsight";
 import VerifiedLeadAnalysis from "@/pages/VerifiedLeadAnalysis";
+import SeasonArchive from "@/pages/SeasonArchive";
 
 function RequireAuth({ children }) {
   const { isAuthenticated } = useAuth();
@@ -46,6 +47,7 @@ function App() {
                       <Route path="/latest" element={<Latest />} />
                       <Route path="/insights" element={<ApplicationInsight />} />
                       <Route path="/verified-leads" element={<VerifiedLeadAnalysis />} />
+                      <Route path="/season-archive" element={<SeasonArchive />} />
                       <Route path="/settings" element={<Settings />} />
                     </Routes>
                   </Layout>

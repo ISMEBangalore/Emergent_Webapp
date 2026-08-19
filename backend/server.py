@@ -831,9 +831,18 @@ class SeasonIn(BaseModel):
     end: Optional[str] = None
 
 
+def _season_meta(season: Dict[str, Any]) -> Dict[str, Any]:
+    """Season fields safe to embed in a response's `season` key - drops frozen_data
+    (a full funnel result) so a frozen season's payload doesn't carry that blob
+    twice: once at the response's top level, once nested inside its own metadata."""
+    return {k: v for k, v in season.items() if k != "frozen_data"}
+
+
 @api_router.get("/seasons")
 async def list_seasons():
-    return await db.seasons.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # frozen_data can be a substantial blob once a season is frozen - the list view
+    # only needs label/range/status, never the full funnel result.
+    return await db.seasons.find({}, {"_id": 0, "frozen_data": 0}).sort("created_at", -1).to_list(200)
 
 
 @api_router.post("/seasons")
@@ -845,6 +854,7 @@ async def create_season(payload: SeasonIn):
         "id": str(uuid.uuid4()), "label": label,
         "start": _validate_date(payload.start, "start"), "end": _validate_date(payload.end, "end"),
         "created_at": now_iso(),
+        "frozen": False, "frozen_data": None, "frozen_at": None,
     }
     await db.seasons.insert_one(doc)
     doc.pop("_id", None)
@@ -864,9 +874,51 @@ async def season_verified_lead_analysis(season_id: str):
     season = await db.seasons.find_one({"id": season_id}, {"_id": 0})
     if not season:
         raise HTTPException(404, "Season not found")
+    if season.get("frozen") and season.get("frozen_data"):
+        # A frozen season is a fully computed, stored result — no recompute, no scan
+        # of reports/applicant_records at all. That's the entire point: once a
+        # closed/historical season is frozen, viewing or comparing it costs nothing,
+        # and the underlying raw reports/applicant_records it was built from can
+        # later be safely pruned without this view losing anything.
+        data = dict(season["frozen_data"])
+        data["season"] = _season_meta(season)
+        return data
     data = await _build_verified_lead_analysis(season.get("start"), season.get("end"), no_baseline=True)
-    data["season"] = season
+    data["season"] = _season_meta(season)
     return data
+
+
+@api_router.post("/seasons/{season_id}/freeze")
+async def freeze_season(season_id: str):
+    """Computes this season's funnel once and stores it permanently on the season
+    document. From then on, viewing/comparing this season is a cheap direct read —
+    no recomputation, and no dependency on the underlying reports/applicant_records
+    still existing. Use this once a season is truly closed and won't change again."""
+    season = await db.seasons.find_one({"id": season_id}, {"_id": 0})
+    if not season:
+        raise HTTPException(404, "Season not found")
+    data = await _build_verified_lead_analysis(season.get("start"), season.get("end"), no_baseline=True)
+    frozen_at = now_iso()
+    await db.seasons.update_one(
+        {"id": season_id},
+        {"$set": {"frozen": True, "frozen_data": data, "frozen_at": frozen_at}},
+    )
+    response = dict(data)
+    response["season"] = _season_meta({**season, "frozen": True, "frozen_at": frozen_at})
+    return response
+
+
+@api_router.post("/seasons/{season_id}/unfreeze")
+async def unfreeze_season(season_id: str):
+    """Reverts a frozen season back to live recomputation — a safety valve in case
+    it was frozen by mistake or before the underlying data was fully correct."""
+    res = await db.seasons.update_one(
+        {"id": season_id},
+        {"$set": {"frozen": False, "frozen_data": None, "frozen_at": None}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Season not found")
+    return {"unfrozen": True}
 
 
 app.include_router(auth_router)
