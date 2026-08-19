@@ -7,7 +7,7 @@ const nav = [
   { to: "/", label: "Dashboard", icon: ChartBar, testid: "nav-dashboard" },
   { to: "/generate", label: "Generate Report", icon: UploadSimple, testid: "nav-generate" },
   { to: "/compare", label: "Week Compare", icon: ArrowsDownUp, testid: "nav-compare" },
-  { to: "/latest", label: "Report Till Date", icon: ChartLineUp, testid: "nav-cumulative" },
+  { to: "/cumulative", label: "Report Till Date", icon: ChartLineUp, testid: "nav-cumulative" },
   { to: "/insights", label: "Application Insight", icon: Lightbulb, testid: "nav-insights" },
   { to: "/verified-leads", label: "Verified Lead Analysis", icon: FunnelSimple, testid: "nav-verified-leads" },
   { to: "/season-archive", label: "Season Archive", icon: Archive, testid: "nav-season-archive" },
