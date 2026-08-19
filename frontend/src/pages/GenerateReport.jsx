@@ -14,6 +14,7 @@ export default function GenerateReport() {
   const [weekDate, setWeekDate] = useState(new Date().toISOString().slice(0, 10));
   const [leadFile, setLeadFile] = useState(null);
   const [appFiles, setAppFiles] = useState([]);
+  const [joinedFile, setJoinedFile] = useState(null);
   const [amount, setAmount] = useState({});
   const [addAttr, setAddAttr] = useState({});
   const [busy, setBusy] = useState(false);
@@ -39,6 +40,7 @@ export default function GenerateReport() {
       fd.append("additional_attributed", JSON.stringify(addAttr));
       fd.append("lead_file", leadFile);
       appFiles.forEach((f) => fd.append("application_files", f));
+      if (joinedFile) fd.append("joined_file", joinedFile);
       const { id } = await api.createReport(fd);
       toast.success("Uploaded — generating report…");
       nav(`/report/${id}`);
@@ -85,6 +87,10 @@ export default function GenerateReport() {
                   onFile={(f) => setLeadFile(f)} onClear={() => setLeadFile(null)} testid="lead-dropzone" />
 
         <MultiDropzone files={appFiles} setFiles={setAppFiles} />
+
+        <Dropzone label="Joined Students (.xlsx) — optional, final list of who actually reported"
+                  file={joinedFile} onFile={(f) => setJoinedFile(f)} onClear={() => setJoinedFile(null)}
+                  testid="joined-dropzone" />
 
         <div>
           <Label className="text-xs uppercase tracking-wide text-slate-500 flex items-center gap-1.5">

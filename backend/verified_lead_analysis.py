@@ -192,40 +192,29 @@ def _read_all_data_sheets(content: bytes) -> pd.DataFrame:
 
 def match_joined_students(upload_bytes: bytes, records: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Parses a 'final students who reported' file and marks matching
-    applicant_records as joined: Application No per row, falling back to Name
-    only for that same row when the App No doesn't resolve. Name fallback only
-    trusts names that are unique across the whole applicant pool — a common
-    first name (e.g. two different "ADITYA"s in different programs) must never
-    cross-match a student who isn't actually on the joined list."""
+    applicant_records as joined, by Application No only. Name matching was
+    tried as a fallback and dropped: a common first name (e.g. two different
+    "ADITYA"s in different programs) can cross-match the wrong student, and
+    Application No is reliably present and unique in this CRM's exports."""
     df = _read_all_data_sheets(upload_bytes)
     if len(df) == 0:
         raise ValueError("Couldn't find any usable rows in this file.")
     col_appno = _find_col(df, APP_NO_CANDS, prefer_data=True)
-    col_name = _find_col(df, NAME_CANDS, prefer_data=True)
-    if col_appno is None and col_name is None:
-        raise ValueError("Couldn't find an Application No or Name column in this file.")
+    if col_appno is None:
+        raise ValueError("Couldn't find an Application No column in this file.")
 
-    appnos = _norm(df[col_appno]) if col_appno is not None else pd.Series([""] * len(df))
-    names = _norm_name(df[col_name]) if col_name is not None else pd.Series([""] * len(df))
-
+    appnos = _norm(df[col_appno])
     by_appno = {r["app_no"]: r for r in records if r.get("app_no")}
-    name_counts: Dict[str, int] = {}
-    for r in records:
-        n = r.get("name")
-        if n:
-            name_counts[n] = name_counts.get(n, 0) + 1
-    by_unique_name = {r["name"]: r for r in records if r.get("name") and name_counts[r["name"]] == 1}
 
     matched_ids: List[Any] = []
     matched_id_set = set()
     unmatched_by_appno = 0
-    for i in range(len(df)):
-        app_no, name = appnos.iloc[i], names.iloc[i]
+    for app_no in appnos:
         r = by_appno.get(app_no) if app_no else None
         if r is None:
             unmatched_by_appno += 1
-            r = by_unique_name.get(name) if name else None
-        if r is not None and r["_id"] not in matched_id_set:
+            continue
+        if r["_id"] not in matched_id_set:
             matched_ids.append(r["_id"])
             matched_id_set.add(r["_id"])
 
@@ -233,5 +222,5 @@ def match_joined_students(upload_bytes: bytes, records: List[Dict[str, Any]]) ->
         "matched_ids": matched_ids,
         "matched_count": len(matched_ids),
         "total_upload_rows": len(df),
-        "unmatched_by_appno_count": unmatched_by_appno if col_appno is not None else None,
+        "unmatched_by_appno_count": unmatched_by_appno,
     }

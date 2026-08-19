@@ -77,12 +77,25 @@ def _kpis(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def _match_and_flag_joined(joined_bytes: bytes, rec_query: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Matches an uploaded 'final students who reported' file against every
+    applicant_records row in scope (not just one report's) and flags the
+    matches joined=True. Raises ValueError on a file it can't parse."""
+    records = await db.applicant_records.find(rec_query or {}, {"app_no": 1}).to_list(50000)
+    result = await asyncio.to_thread(match_joined_students, joined_bytes, records)
+    matched_ids = result.pop("matched_ids", [])
+    if matched_ids:
+        await db.applicant_records.update_many({"_id": {"$in": matched_ids}}, {"$set": {"joined": True}})
+    return result
+
+
 async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
                    settings: Dict[str, Any], amount_spent: Dict[str, float],
                    additional_attributed: Dict[str, float],
                    preset_app_counts: Optional[Dict[str, Any]] = None,
                    date_range: Optional[Dict[str, str]] = None,
-                   week_date: Optional[str] = None):
+                   week_date: Optional[str] = None,
+                   joined_bytes: Optional[bytes] = None):
     try:
         if preset_app_counts is not None:
             app_counts = preset_app_counts
@@ -107,6 +120,14 @@ async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
             await db.applicant_records.insert_many([
                 {**r, "report_id": report_id, "week_date": week_date} for r in applicant_records
             ])
+        if joined_bytes:
+            # Matched against every applicant_records row seen so far, not just this
+            # report's — a student can join weeks after the report that logged their
+            # application. A bad joined-file shouldn't fail the report itself.
+            try:
+                await _match_and_flag_joined(joined_bytes)
+            except Exception:
+                logger.exception("joined-students matching failed for report %s", report_id)
     except Exception as e:  # noqa
         logger.exception("report processing failed")
         await db.reports.update_one(
@@ -210,10 +231,12 @@ async def create_report(
     lead_end_date: str = Form(""),
     lead_file: UploadFile = File(...),
     application_files: List[UploadFile] = File(default=[]),
+    joined_file: Optional[UploadFile] = File(None),
 ):
     settings = await get_settings()
     lead_bytes = await lead_file.read()
     app_bytes = [await f.read() for f in (application_files or [])]
+    joined_bytes = await joined_file.read() if joined_file is not None else None
 
     report_id = str(uuid.uuid4())
     date_range = {"start": lead_start_date or None, "end": lead_end_date or None}
@@ -239,7 +262,7 @@ async def create_report(
     # writes before the report even starts processing.
     asyncio.create_task(_process(report_id, lead_bytes, app_bytes, settings,
                                  doc["amount_spent"], doc["additional_attributed"],
-                                 date_range=date_range, week_date=week_date))
+                                 date_range=date_range, week_date=week_date, joined_bytes=joined_bytes))
     asyncio.create_task(_store_source_files(report_id, lead_bytes, app_bytes))
     return {"id": report_id, "status": "processing"}
 
@@ -743,9 +766,9 @@ async def upload_joined_students(
     end: Optional[str] = Form(None),
 ):
     """Marks applicant_records as joined by matching an uploaded 'final students
-    who reported' file against Application No (preferred) or Name. The CRM's own
-    Enrolment Status field isn't kept up to date, so it can't be trusted for this —
-    this upload is the only source of truth for who actually joined."""
+    who reported' file against Application No. The CRM's own Enrolment Status
+    field isn't kept up to date, so it can't be trusted for this — this upload
+    is the only source of truth for who actually joined."""
     start = _validate_date(start, "start")
     end = _validate_date(end, "end")
     upload_bytes = await file.read()
@@ -758,17 +781,11 @@ async def upload_joined_students(
         wd_q["$lte"] = end
     if wd_q:
         rec_query["week_date"] = wd_q
-    records = await db.applicant_records.find(rec_query, {"app_no": 1, "name": 1}).to_list(50000)
 
     try:
-        result = await asyncio.to_thread(match_joined_students, upload_bytes, records)
+        return await _match_and_flag_joined(upload_bytes, rec_query)
     except ValueError as e:
         raise HTTPException(400, str(e))
-
-    matched_ids = result.pop("matched_ids", [])
-    if matched_ids:
-        await db.applicant_records.update_many({"_id": {"$in": matched_ids}}, {"$set": {"joined": True}})
-    return result
 
 
 # ---------------- Seasons (named, live-recomputing Verified Lead Analysis ranges) ----------------
