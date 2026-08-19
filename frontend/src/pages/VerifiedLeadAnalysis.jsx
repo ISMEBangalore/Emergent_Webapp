@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   ArrowLeft, CalendarBlank, ChartLineUp, CloudArrowUp, FloppyDisk, Trash, ArrowsLeftRight,
-  CaretUp, CaretDown, CaretUpDown,
+  CaretUp, CaretDown, CaretUpDown, Warning,
 } from "@phosphor-icons/react";
 import { fmtInt, fmtPct1 } from "@/lib/format";
 import { rampColor } from "@/lib/geoColors";
@@ -21,6 +21,15 @@ const isoDaysAgo = (days) => {
 };
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
 const today = () => new Date().toISOString().slice(0, 10);
+
+// A season with no end date picks up the single latest report system-wide as its
+// snapshot — correct for an ongoing season, but silently wrong for a closed one
+// (it'll show whatever the newest report anywhere is, not that season's own data).
+// Surfacing the saved range everywhere a season is shown makes that mistake visible.
+function seasonRangeLabel(season) {
+  if (!season) return "";
+  return `${season.start || "no start"} → ${season.end || "no end"}`;
+}
 
 const Preset = ({ label, onClick, testid }) => (
   <button data-testid={testid} onClick={onClick}
@@ -445,7 +454,9 @@ export default function VerifiedLeadAnalysis() {
                   <SelectContent>
                     <SelectItem value="live">Live (current filters)</SelectItem>
                     {seasons.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label} <span className="text-slate-400">({seasonRangeLabel(s)})</span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -472,19 +483,43 @@ export default function VerifiedLeadAnalysis() {
             </div>
 
             {saveOpen && (
-              <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-slate-50 rounded-md border border-slate-200">
-                <div>
-                  <Label className="text-xs uppercase tracking-wide text-slate-500">Season name</Label>
-                  <Input
-                    data-testid="vla-season-label-input" value={seasonLabel}
-                    onChange={(e) => setSeasonLabel(e.target.value)}
-                    placeholder="Analysis 2025-26" className="mt-1 w-56"
-                  />
+              <div className="mb-4 p-3 bg-slate-50 rounded-md border border-slate-200">
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <Label className="text-xs uppercase tracking-wide text-slate-500">Season name</Label>
+                    <Input
+                      data-testid="vla-season-label-input" value={seasonLabel}
+                      onChange={(e) => setSeasonLabel(e.target.value)}
+                      placeholder="Analysis 2025-26" className="mt-1 w-56"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 pb-2">
+                    Will save as <strong>{seasonRangeLabel({ start, end })}</strong>. Numbers keep recomputing live as new weeks are uploaded.
+                  </p>
+                  <Button data-testid="vla-save-season-confirm" onClick={saveSeason} disabled={saving} className="bg-[#002FA7] hover:bg-[#002FA7]/90">
+                    {saving ? "Saving…" : "Save"}
+                  </Button>
                 </div>
-                <p className="text-xs text-slate-500 pb-2">Saves the current date range below as a named view. Numbers keep recomputing live as new weeks are uploaded.</p>
-                <Button data-testid="vla-save-season-confirm" onClick={saveSeason} disabled={saving} className="bg-[#002FA7] hover:bg-[#002FA7]/90">
-                  {saving ? "Saving…" : "Save"}
-                </Button>
+                {!end && (
+                  <div className="flex items-start gap-2 mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-800 text-xs" data-testid="vla-season-no-end-warning">
+                    <Warning size={15} weight="fill" className="mt-0.5 shrink-0" />
+                    <span>
+                      No <strong>To</strong> date is set — this season will always show whichever report is the single
+                      latest one system-wide, not scoped to this period. That's correct for your current, still-running
+                      season, but wrong for a closed/historical one (it'll silently show a different season's data
+                      instead of its own). Set a To date first if this season is meant to be a bounded, past period.
+                    </span>
+                  </div>
+                )}
+                {end && !start && (
+                  <div className="flex items-start gap-2 mt-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs" data-testid="vla-season-no-start-warning">
+                    <Warning size={15} weight="fill" className="mt-0.5 shrink-0" />
+                    <span>
+                      No <strong>From</strong> date is set — minor, but a few stray records from well before this
+                      period (data-entry outliers, old test rows) could get counted in Application/Admission Fee Paid.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -586,16 +621,26 @@ export default function VerifiedLeadAnalysis() {
           </div>
 
           {compareDataA && compareDataB && (
-            <div className="grid lg:grid-cols-2 gap-4">
-              <div className="bg-white border border-slate-200 rounded-md p-5">
-                <h4 className="text-sm font-bold text-slate-800 mb-3">{compareDataA.season?.label}</h4>
-                <FunnelTable rows={compareRowsA || []} testid="vla-compare-table-a" />
+            <>
+              {compareDataA.season?.id === compareDataB.season?.id && (
+                <div className="flex items-start gap-2 mb-4 px-4 py-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm" data-testid="vla-compare-same-season-warning">
+                  <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
+                  <span>Season A and Season B are the same saved season — pick two different ones to compare.</span>
+                </div>
+              )}
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="bg-white border border-slate-200 rounded-md p-5">
+                  <h4 className="text-sm font-bold text-slate-800">{compareDataA.season?.label}</h4>
+                  <p className="text-xs text-slate-400 mb-3">{seasonRangeLabel(compareDataA.season)}</p>
+                  <FunnelTable rows={compareRowsA || []} testid="vla-compare-table-a" />
+                </div>
+                <div className="bg-white border border-slate-200 rounded-md p-5">
+                  <h4 className="text-sm font-bold text-slate-800">{compareDataB.season?.label}</h4>
+                  <p className="text-xs text-slate-400 mb-3">{seasonRangeLabel(compareDataB.season)}</p>
+                  <FunnelTable rows={compareRowsB || []} testid="vla-compare-table-b" />
+                </div>
               </div>
-              <div className="bg-white border border-slate-200 rounded-md p-5">
-                <h4 className="text-sm font-bold text-slate-800 mb-3">{compareDataB.season?.label}</h4>
-                <FunnelTable rows={compareRowsB || []} testid="vla-compare-table-b" />
-              </div>
-            </div>
+            </>
           )}
         </TabsContent>
       </Tabs>
