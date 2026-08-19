@@ -21,7 +21,7 @@ from starlette.middleware.cors import CORSMiddleware
 from auth import TokenData, bootstrap_admin, create_access_token, get_current_user, verify_password
 from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports
 from apps_parser import parse_application_files
-from application_insights import evaluate_alerts, merge_buckets, parse_insights, summarize_bucket
+from application_insights import _blank_bucket, evaluate_alerts, parse_insights, subtract_buckets, summarize_bucket
 from verified_lead_analysis import build_funnel, extract_applicant_records, match_joined_students
 from excel_export import build_workbook
 
@@ -412,18 +412,11 @@ async def _build_cumulative(start: Optional[str] = None, end: Optional[str] = No
     if start and end and start > end:
         raise HTTPException(400, "start date must be on or before end date.")
     settings = await get_settings()
+    # Every report is a full cumulative-to-date export, not a delta - fetch ALL ready
+    # reports (not just ones in [start, end]) so aggregate_reports can find the latest
+    # snapshot before `start` too, needed to diff out only what changed in the window.
     reports = await db.reports.find({"status": "ready"}, {"_id": 0}).to_list(2000)
-
-    def in_range(r):
-        wd = r.get("week_date") or ""
-        if start and wd < start:
-            return False
-        if end and wd > end:
-            return False
-        return True
-
-    reports = [r for r in reports if in_range(r)]
-    result = await asyncio.to_thread(aggregate_reports, reports, settings)
+    result = await asyncio.to_thread(aggregate_reports, reports, settings, start, end)
     weeks = result.get("data_quality", {}).get("weeks_aggregated", 0)
     if start or end:
         rng = f"{start or 'start'} to {end or 'today'}"
@@ -461,10 +454,17 @@ async def export_cumulative(start: Optional[str] = None, end: Optional[str] = No
 
 
 async def _build_insights(start: Optional[str] = None, end: Optional[str] = None) -> Dict[str, Any]:
-    """Aggregates application_insights buckets across all stored reports whose
-    week falls in range. Deliberately independent of any single week's report —
-    the admission fee (the real conversion event this tracks) is often paid
-    weeks after the application fee, in a different report cycle entirely."""
+    """Application dumps are also a full cumulative-to-date export each week
+    (confirmed with the user), not new applications only - so each report's
+    insight_buckets already represents the whole applicant pool as of that
+    week. Summing buckets across every report in range would multiply-count
+    the same application once per week it was re-uploaded, exactly like the
+    lead-count bug in aggregate_reports. Instead this diffs the latest bucket
+    at or before `end` against the latest bucket strictly before `start`, so a
+    date range shows only what changed in that window. Deliberately independent
+    of any single week's own report — the admission fee (the real conversion
+    event this tracks) is often paid weeks after the application fee, in a
+    different report cycle entirely."""
     start = _validate_date(start, "start")
     end = _validate_date(end, "end")
     if start and end and start > end:
@@ -475,19 +475,26 @@ async def _build_insights(start: Optional[str] = None, end: Optional[str] = None
         {"status": "ready", "insight_buckets": {"$exists": True}},
         {"_id": 0, "insight_buckets": 1, "week_date": 1},
     ).to_list(2000)
+    reports.sort(key=lambda r: r.get("week_date") or "")
 
-    def in_range(r):
-        wd = r.get("week_date") or ""
-        if start and wd < start:
-            return False
-        if end and wd > end:
-            return False
-        return True
+    end_candidates = [r for r in reports if not end or (r.get("week_date") or "") <= end]
+    start_candidates = [r for r in reports if start and (r.get("week_date") or "") < start]
+    snapshot_end = end_candidates[-1] if end_candidates else None
+    snapshot_start = start_candidates[-1] if start_candidates else None
+    weeks = len([r for r in reports if (not start or (r.get("week_date") or "") >= start)
+                                    and (not end or (r.get("week_date") or "") <= end)])
 
-    reports = [r for r in reports if in_range(r)]
-    all_bucket = merge_buckets([r["insight_buckets"]["All"] for r in reports if r.get("insight_buckets", {}).get("All")])
+    if snapshot_end is None:
+        blank = _blank_bucket()
+        summary = {p: summarize_bucket(blank) for p in ["All", *programs]}
+        return {"programs": programs, "summary": summary, "alerts": [],
+               "reports_included": 0, "date_range": {"start": start, "end": end}}
+
+    end_buckets = snapshot_end.get("insight_buckets") or {}
+    start_buckets = (snapshot_start.get("insight_buckets") or {}) if snapshot_start else {}
+    all_bucket = subtract_buckets(end_buckets.get("All") or _blank_bucket(), start_buckets.get("All"))
     program_buckets = {
-        p: merge_buckets([r["insight_buckets"][p] for r in reports if r.get("insight_buckets", {}).get(p)])
+        p: subtract_buckets(end_buckets.get(p) or _blank_bucket(), start_buckets.get(p))
         for p in programs
     }
     summary = {"All": summarize_bucket(all_bucket)}
@@ -497,7 +504,7 @@ async def _build_insights(start: Optional[str] = None, end: Optional[str] = None
         "programs": programs,
         "summary": summary,
         "alerts": evaluate_alerts(all_bucket, program_buckets),
-        "reports_included": len(reports),
+        "reports_included": weeks,
         "date_range": {"start": start, "end": end},
     }
 
@@ -750,10 +757,13 @@ def _applicant_date_query(start: Optional[str], end: Optional[str]) -> Dict[str,
 
 
 async def _build_verified_lead_analysis(start: Optional[str] = None, end: Optional[str] = None) -> Dict[str, Any]:
-    """Publisher x program funnel: Total Leads / Verified Leads (from each report's
-    already-computed publisher_reports) summed against Application / Admission Fee
-    Paid / Joined (from the applicant_records collection) for reports whose week
-    falls in range. Always recomputed live from current data — never a frozen
+    """Publisher x program funnel: Total Leads / Verified Leads come from
+    aggregate_reports' snapshot-diffed publisher_reports (each Lead file is a
+    cumulative export too, so this can't just sum every report — see
+    aggregate_reports' docstring), diffed for the same window as everything
+    else. Application / Admission Fee Paid / Joined come from the
+    applicant_records collection, already deduplicated by Application No at
+    upload time. Always recomputed live from current data — never a frozen
     snapshot — so a saved season stays accurate as more weeks are uploaded into it."""
     start = _validate_date(start, "start")
     end = _validate_date(end, "end")
@@ -763,27 +773,19 @@ async def _build_verified_lead_analysis(start: Optional[str] = None, end: Option
     programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
 
     reports = await db.reports.find(
-        {"status": "ready", "result.publisher_reports": {"$exists": True}},
-        {"_id": 0, "result.publisher_reports": 1, "week_date": 1},
+        {"status": "ready", "result.publisher_reports": {"$exists": True}}, {"_id": 0},
     ).to_list(2000)
-
-    def in_range(wd):
-        wd = wd or ""
-        if start and wd < start:
-            return False
-        if end and wd > end:
-            return False
-        return True
-
-    reports = [r for r in reports if in_range(r.get("week_date"))]
+    agg = await asyncio.to_thread(aggregate_reports, reports, settings, start, end)
+    publisher_reports = agg.get("publisher_reports") or {}
+    weeks = agg.get("data_quality", {}).get("weeks_aggregated", 0)
 
     records = await db.applicant_records.find(_applicant_date_query(start, end), {"_id": 0}).to_list(50000)
 
-    funnel = await asyncio.to_thread(build_funnel, reports, records, programs)
+    funnel = await asyncio.to_thread(build_funnel, publisher_reports, records, programs)
     return {
         "programs": programs,
         "funnel": funnel,
-        "reports_included": len(reports),
+        "reports_included": weeks,
         "applications_included": len(records),
         "date_range": {"start": start, "end": end},
     }

@@ -573,148 +573,217 @@ def build_result(programs, stage_rows, matrix_counts, total_leads, verified_lead
 
 
 
-def _sum_row(target, values):
-    for p, v in (values or {}).items():
-        target[p] = target.get(p, 0) + (v or 0)
+def _extract_raw_counts(result: Dict[str, Any], columns: List[str], stage_rows: List[str]) -> Dict[str, Any]:
+    """Recovers the raw count dicts build_result() was originally built from, by
+    reading them back out of its summary/matrix rows. Lets a built result be
+    re-diffed and rebuilt (via _diff_result) without duplicating build_result()'s
+    percentage/total logic."""
+    summ = {s["label"]: s.get("values", {}) for s in result.get("summary", []) if "values" in s}
+    matrix = {m["stage"]: m.get("values", {}) for m in result.get("matrix", [])}
 
+    def vals(label):
+        return dict(summ.get(label, {}))
 
-def _aggregate(results, cols, stage_rows):
-    """Sum aggregated counts across a list of result dicts for a fixed column set."""
-    matrix_counts = {row: {c: 0 for c in cols} for row in stage_rows}
-    verified_leads = {c: 0 for c in cols}
-    redirect_leads = {c: 0 for c in cols}
-    redirect_verified = {c: 0 for c in cols}
-    api_leads = {c: 0 for c in cols}
-    api_verified = {c: 0 for c in cols}
-    relevant_leads = {c: 0 for c in cols}
-    app_counts = {c: {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0} for c in cols}
-    amount_spent = {c: 0 for c in cols}
-    additional_attributed = {c: 0 for c in cols}
-
-    label_map = {
-        "Verified Leads": verified_leads,
-        "Total Redirect Leads": redirect_leads,
-        "Total Verified redirect leads": redirect_verified,
-        "Total API Leads": api_leads,
-        "Total Verified API leads": api_verified,
-        "Relevant Leads": relevant_leads,
-        "Amount Spent": amount_spent,
-        "Additional Attributed Applications": additional_attributed,
+    with_code, without_code = vals("No. of Applications with codes"), vals("No. of Applications without codes")
+    via_redirect, via_api = vals("No of applications through redirect leads"), vals("No of applications through API leads")
+    return {
+        "matrix_counts": {row: dict(matrix.get(row, {})) for row in stage_rows},
+        "total_leads": vals("Total Leads"), "verified_leads": vals("Verified Leads"),
+        "redirect_leads": vals("Total Redirect Leads"), "redirect_verified": vals("Total Verified redirect leads"),
+        "api_leads": vals("Total API Leads"), "api_verified": vals("Total Verified API leads"),
+        "relevant_leads": vals("Relevant Leads"),
+        "application_counts": {
+            c: {"with_code": with_code.get(c, 0), "without_code": without_code.get(c, 0),
+               "via_redirect": via_redirect.get(c, 0), "via_api": via_api.get(c, 0)}
+            for c in columns
+        },
+        "amount_spent": vals("Amount Spent"), "additional_attributed": vals("Additional Attributed Applications"),
     }
-    app_map = {
-        "No. of Applications with codes": "with_code",
-        "No. of Applications without codes": "without_code",
-        "No of applications through redirect leads": "via_redirect",
-        "No of applications through API leads": "via_api",
-    }
-    for res in results:
-        if not res:
-            continue
-        for m in res.get("matrix", []):
-            row = m["stage"]
-            if row in matrix_counts:
-                for c in cols:
-                    matrix_counts[row][c] += m["values"].get(c, 0) or 0
-        for s in res.get("summary", []):
-            label = s.get("label")
-            if label in label_map:
-                for c in cols:
-                    label_map[label][c] += s.get("values", {}).get(c, 0) or 0
-            if label in app_map:
-                key = app_map[label]
-                for c in cols:
-                    app_counts[c][key] += s.get("values", {}).get(c, 0) or 0
 
-    total_leads = {c: sum(matrix_counts[row][c] for row in stage_rows) for c in cols}
+
+def _zero_result(columns: List[str], stage_rows: List[str]) -> Dict[str, Any]:
+    """A build_result()-shaped dict with every count at 0, for a column set a
+    snapshot doesn't actually have data for (e.g. a program added to settings
+    after the latest report was computed)."""
+    zero = {c: 0 for c in columns}
     return build_result(
-        programs=cols, stage_rows=stage_rows, matrix_counts=matrix_counts,
-        total_leads=total_leads, verified_leads=verified_leads,
-        redirect_leads=redirect_leads, redirect_verified=redirect_verified,
-        api_leads=api_leads, api_verified=api_verified, relevant_leads=relevant_leads,
-        application_counts=app_counts, amount_spent=amount_spent,
-        additional_attributed=additional_attributed,
+        programs=columns, stage_rows=stage_rows,
+        matrix_counts={row: dict(zero) for row in stage_rows},
+        total_leads=zero, verified_leads=zero, redirect_leads=zero, redirect_verified=zero,
+        api_leads=zero, api_verified=zero, relevant_leads=zero,
+        application_counts={c: {} for c in columns}, amount_spent=zero, additional_attributed=zero,
         detected_columns={}, data_quality={},
     )
 
 
-def aggregate_reports(reports, settings):
-    """Sum aggregated counts across multiple stored reports (program + publisher)."""
+def _diff_counts(end_vals: Dict[str, float], start_vals: Dict[str, float]) -> Dict[str, float]:
+    """(end - start) per key, clamped at 0 - a count should never go negative
+    between two cumulative snapshots taken further apart in time."""
+    keys = set(end_vals) | set(start_vals)
+    return {k: max(0, (end_vals.get(k, 0) or 0) - (start_vals.get(k, 0) or 0)) for k in keys}
+
+
+def _diff_result(end_result: Dict[str, Any], start_result: Optional[Dict[str, Any]],
+                 columns: List[str], stage_rows: List[str],
+                 money: Optional[tuple] = None) -> Dict[str, Any]:
+    """Rebuilds a build_result()-shaped dict as (end snapshot - start snapshot),
+    reusing build_result() itself so every percentage/total stays internally
+    consistent with how a single freshly-computed report looks. `money`, if
+    given, overrides amount_spent/additional_attributed with pre-summed values -
+    those are typed in per week in Generate Report, not part of the cumulative
+    CRM export, so they're summed across the window elsewhere rather than diffed."""
+    end_raw = _extract_raw_counts(end_result, columns, stage_rows)
+    zero = {c: 0 for c in columns}
+    start_raw = (_extract_raw_counts(start_result, columns, stage_rows) if start_result else
+                {"matrix_counts": {row: zero for row in stage_rows},
+                 "total_leads": zero, "verified_leads": zero, "redirect_leads": zero,
+                 "redirect_verified": zero, "api_leads": zero, "api_verified": zero,
+                 "relevant_leads": zero,
+                 "application_counts": {c: {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0} for c in columns},
+                 "amount_spent": zero, "additional_attributed": zero})
+
+    matrix_counts = {row: _diff_counts(end_raw["matrix_counts"][row], start_raw["matrix_counts"][row]) for row in stage_rows}
+    application_counts = {
+        c: {k: max(0, (end_raw["application_counts"][c][k] or 0) - (start_raw["application_counts"][c][k] or 0))
+           for k in ("with_code", "without_code", "via_redirect", "via_api")}
+        for c in columns
+    }
+    amount_spent, additional_attributed = money if money else (
+        _diff_counts(end_raw["amount_spent"], start_raw["amount_spent"]),
+        _diff_counts(end_raw["additional_attributed"], start_raw["additional_attributed"]),
+    )
+
+    return build_result(
+        programs=columns, stage_rows=stage_rows, matrix_counts=matrix_counts,
+        total_leads=_diff_counts(end_raw["total_leads"], start_raw["total_leads"]),
+        verified_leads=_diff_counts(end_raw["verified_leads"], start_raw["verified_leads"]),
+        redirect_leads=_diff_counts(end_raw["redirect_leads"], start_raw["redirect_leads"]),
+        redirect_verified=_diff_counts(end_raw["redirect_verified"], start_raw["redirect_verified"]),
+        api_leads=_diff_counts(end_raw["api_leads"], start_raw["api_leads"]),
+        api_verified=_diff_counts(end_raw["api_verified"], start_raw["api_verified"]),
+        relevant_leads=_diff_counts(end_raw["relevant_leads"], start_raw["relevant_leads"]),
+        application_counts=application_counts, amount_spent=amount_spent, additional_attributed=additional_attributed,
+        detected_columns=end_result.get("detected_columns", {}), data_quality=dict(end_result.get("data_quality", {})),
+    )
+
+
+def aggregate_reports(reports, settings, start: Optional[str] = None, end: Optional[str] = None):
+    """Each stored report is a full cumulative-to-date CRM export as of its
+    week_date, not a delta of that week's new leads/applications - confirmed
+    directly with the user, and reproduced (Total Leads tripling across 3
+    re-uploads of the same file). Summing raw counts across multiple reports
+    therefore multiply-counts the same lead/application once per week it was
+    re-uploaded. Instead: lead/application/verified counts come from the single
+    latest report at or before `end` (or the overall latest if `end` is None),
+    diffed against the latest report strictly before `start` so a date-range
+    query shows only what changed in that window rather than the full running
+    total. Amount Spent / Additional Attributed are typed in per week (not part
+    of the cumulative export) and are summed across every report whose week
+    falls in the window, same as before this fix."""
     cfg = {**DEFAULT_SETTINGS, **(settings or {})}
     programs = cfg["programs"]
     stage_rows = cfg["stage_rows"]
 
-    prog_results = [r.get("result") for r in reports if r.get("result")]
-    weeks = len(prog_results)
-    result = _aggregate(prog_results, programs, stage_rows)
-    result["data_quality"] = {"weeks_aggregated": weeks}
+    ready = sorted((r for r in reports if r.get("result")), key=lambda r: r.get("week_date") or "")
+    end_candidates = [r for r in ready if not end or (r.get("week_date") or "") <= end]
+    start_candidates = [r for r in ready if start and (r.get("week_date") or "") < start]
+    snapshot_end = end_candidates[-1] if end_candidates else None
+    snapshot_start = start_candidates[-1] if start_candidates else None
+    window = [r for r in ready if (not start or (r.get("week_date") or "") >= start)
+                              and (not end or (r.get("week_date") or "") <= end)]
+    weeks = len(window)
 
-    # Publisher cumulative (overall + per program): union publisher columns, top 12 by leads.
-    def pub_cumulative(getter):
-        pub_results = [getter(r["result"]) for r in reports
-                       if r.get("result") and getter(r["result"])]
-        if not pub_results:
+    if snapshot_end is None:
+        zero = {p: 0 for p in programs}
+        result = build_result(
+            programs=programs, stage_rows=stage_rows,
+            matrix_counts={row: dict(zero) for row in stage_rows},
+            total_leads=zero, verified_leads=zero, redirect_leads=zero, redirect_verified=zero,
+            api_leads=zero, api_verified=zero, relevant_leads=zero,
+            application_counts={p: {} for p in programs}, amount_spent=zero, additional_attributed=zero,
+            detected_columns={}, data_quality={},
+        )
+        result["data_quality"] = {"weeks_aggregated": 0}
+        return result
+
+    amount_spent = {p: 0.0 for p in programs}
+    additional_attributed = {p: 0.0 for p in programs}
+    for r in window:
+        for p, v in (r.get("amount_spent") or {}).items():
+            if p in amount_spent:
+                amount_spent[p] += float(v or 0)
+        for p, v in (r.get("additional_attributed") or {}).items():
+            if p in additional_attributed:
+                additional_attributed[p] += float(v or 0)
+
+    end_res, start_res = snapshot_end["result"], snapshot_start["result"] if snapshot_start else None
+    result = _diff_result(end_res, start_res, programs, stage_rows, money=(amount_spent, additional_attributed))
+    result["data_quality"]["weeks_aggregated"] = weeks
+
+    # Publisher cumulative (overall + per program): diff the same two snapshots. A
+    # program missing from a snapshot (e.g. settings changed since that report was
+    # computed) falls back to zero-filled data on the "All" publisher columns,
+    # rather than disappearing from the output entirely.
+    def pub_diff(getter, fallback_cols: List[str]):
+        e = getter(end_res)
+        s = getter(start_res) if start_res else None
+        cols = (e or {}).get("programs") or (s or {}).get("programs") or fallback_cols
+        if not cols:
             return None
-        totals = {}
-        for pr in pub_results:
-            for m in pr.get("matrix", []):
-                for c, v in m["values"].items():
-                    totals[c] = totals.get(c, 0) + (v or 0)
-        pub_cols = [c for c, _ in sorted(totals.items(), key=lambda x: -x[1]) if c != "Other"][:40]
-        cum = _aggregate(pub_results, pub_cols, stage_rows)
-        cum["data_quality"] = {"weeks_aggregated": weeks}
-        return cum
+        return _diff_result(e or _zero_result(cols, stage_rows), s, cols, stage_rows)
 
-    overall = pub_cumulative(lambda res: res.get("publisher_report"))
+    overall = pub_diff(lambda res: res.get("publisher_report"), [])
     if overall:
         result["publisher_report"] = overall
+        pub_cols = overall.get("programs", [])
         pub_reports = {"All": overall}
         for prog_name in programs:
-            pr = pub_cumulative(lambda res, p=prog_name: (res.get("publisher_reports") or {}).get(p))
+            pr = pub_diff(lambda res, p=prog_name: (res.get("publisher_reports") or {}).get(p), pub_cols)
             if pr:
                 pub_reports[prog_name] = pr
         result["publisher_reports"] = pub_reports
 
-    # Program-per-publisher cumulative
-    pub_keys = set()
-    for r in reports:
-        pr = (r.get("result") or {}).get("program_reports") or {}
-        pub_keys.update(k for k in pr.keys() if k != "All")
+    # Program-per-publisher: diff each publisher's sub-result across the same two snapshots.
+    pub_keys = set((end_res.get("program_reports") or {}).keys())
+    if start_res:
+        pub_keys |= set((start_res.get("program_reports") or {}).keys())
+    pub_keys.discard("All")
     prog_reports = {"All": {k: result[k] for k in
                     ("programs", "columns", "matrix", "summary") if k in result}}
     for pub_name in pub_keys:
-        subs = [r["result"]["program_reports"][pub_name] for r in reports
-                if r.get("result") and (r["result"].get("program_reports") or {}).get(pub_name)]
-        if subs:
-            pr = _aggregate(subs, programs, stage_rows)
-            pr["data_quality"] = {"weeks_aggregated": weeks}
-            prog_reports[pub_name] = pr
+        e = (end_res.get("program_reports") or {}).get(pub_name)
+        if not e:
+            continue
+        s = (start_res.get("program_reports") or {}).get(pub_name) if start_res else None
+        prog_reports[pub_name] = _diff_result(e, s, programs, stage_rows)
     if len(prog_reports) > 1:
         result["program_reports"] = prog_reports
 
-    # Geography cumulative (overall + per program): sum matching locations across weeks.
-    def geo_cumulative(key: str) -> Dict[str, Any]:
+    # Geography: diff matching locations between the two snapshots (overall + per program).
+    def geo_diff(key: str) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
         for prog_key in ["All"] + programs:
+            e = (end_res.get(key) or {}).get(prog_key) or {}
+            s = (start_res.get(key) or {}).get(prog_key) if start_res else {} or {}
             merged: Dict[str, Dict[str, Any]] = {}
-            for r in reports:
-                geo = ((r.get("result") or {}).get(key) or {}).get(prog_key) or {}
-                for loc, vals in geo.items():
-                    m = merged.setdefault(loc, {"leads": 0, "verified_leads": 0,
-                                               "relevant_leads": 0, "applications": 0})
-                    m["leads"] += vals.get("leads", 0) or 0
-                    m["verified_leads"] += vals.get("verified_leads", 0) or 0
-                    m["relevant_leads"] += vals.get("relevant_leads", 0) or 0
-                    m["applications"] += vals.get("applications", 0) or 0
-            for m in merged.values():
-                m["conversion_pct"] = round(m["applications"] / m["leads"] * 100, 2) if m["leads"] else None
+            for loc in set(e) | set(s):
+                ev, sv = e.get(loc, {}), s.get(loc, {})
+                leads = max(0, (ev.get("leads", 0) or 0) - (sv.get("leads", 0) or 0))
+                verified = max(0, (ev.get("verified_leads", 0) or 0) - (sv.get("verified_leads", 0) or 0))
+                relevant = max(0, (ev.get("relevant_leads", 0) or 0) - (sv.get("relevant_leads", 0) or 0))
+                apps = max(0, (ev.get("applications", 0) or 0) - (sv.get("applications", 0) or 0))
+                if leads or verified or relevant or apps:
+                    merged[loc] = {"leads": leads, "verified_leads": verified, "relevant_leads": relevant,
+                                  "applications": apps,
+                                  "conversion_pct": round(apps / leads * 100, 2) if leads else None}
             if merged:
                 out[prog_key] = merged
         return out
 
-    geo_state = geo_cumulative("geo_by_state")
+    geo_state = geo_diff("geo_by_state")
     if geo_state:
         result["geo_by_state"] = geo_state
-    geo_city = geo_cumulative("geo_by_city")
+    geo_city = geo_diff("geo_by_city")
     if geo_city:
         result["geo_by_city"] = geo_city
     return result

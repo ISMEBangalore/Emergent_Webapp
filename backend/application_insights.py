@@ -260,6 +260,30 @@ def merge_buckets(buckets: List[Dict[str, Any]]) -> Dict[str, Any]:
     return out
 
 
+def subtract_buckets(end: Dict[str, Any], start: Dict[str, Any] = None) -> Dict[str, Any]:
+    """(end - start): what changed between two cumulative snapshots. Every field
+    in a bucket is additive, so this mirrors merge_buckets but subtracts instead
+    of sums, clamping each value at 0 - a count should never go negative between
+    two snapshots taken further apart in time."""
+    start = start or _blank_bucket()
+    out = _blank_bucket()
+    out["applications"] = max(0, end.get("applications", 0) - start.get("applications", 0))
+    out["admission_paid"] = max(0, end.get("admission_paid", 0) - start.get("admission_paid", 0))
+    out["discount_used"] = max(0, end.get("discount_used", 0) - start.get("discount_used", 0))
+    out["discount_total"] = max(0, end.get("discount_total", 0) - start.get("discount_total", 0))
+    out["pct_12th_sum"] = max(0.0, end.get("pct_12th_sum", 0.0) - start.get("pct_12th_sum", 0.0))
+    out["pct_12th_count"] = max(0, end.get("pct_12th_count", 0) - start.get("pct_12th_count", 0))
+    for key in ("gender", "father_occupation", "mother_occupation", "category",
+                "board_12th", "hostel", "finance", "self_reported_source", "tracked_publisher",
+                "publisher_totals", "publisher_approved"):
+        e, s = end.get(key) or {}, start.get(key) or {}
+        for name in set(e) | set(s):
+            diff = e.get(name, 0) - s.get(name, 0)
+            if diff > 0:
+                out[key][name] = diff
+    return out
+
+
 CRITICAL_MIN_APPLICATIONS = 50
 CRITICAL_MIN_PUBLISHER_APPS = 30
 

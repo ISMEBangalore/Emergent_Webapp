@@ -139,27 +139,28 @@ def _blank_row() -> Dict[str, Any]:
     return {"total_leads": 0, "verified_leads": 0, "application": 0, "admission_fee_paid": 0, "joined": 0}
 
 
-def build_funnel(reports: List[Dict[str, Any]], applicant_records: List[Dict[str, Any]],
+def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records: List[Dict[str, Any]],
                  programs: List[str]) -> Dict[str, List[Dict[str, Any]]]:
-    """reports: list of stored report docs (need .result.publisher_reports).
+    """publisher_reports: {program: build_result()-shaped dict}, already snapshot-
+    diffed for the requested window by aggregate_reports (a single already-correct
+    structure, not a list of reports to sum — see aggregate_reports' docstring for
+    why summing multiple reports would multiply-count leads).
     applicant_records: rows from the applicant_records collection for the same range.
     Returns {program: [ {publisher, total_leads, verified_leads, application,
                          admission_fee_paid, joined}, ... ]}"""
     out: Dict[str, Dict[str, Dict[str, Any]]] = {p: {} for p in programs}
 
-    for r in reports:
-        pub_reports = ((r.get("result") or {}).get("publisher_reports") or {})
-        for p in programs:
-            pr = pub_reports.get(p)
-            if not pr:
-                continue
-            summary = {s.get("label"): s for s in pr.get("summary", [])}
-            total_row = summary.get("Total Leads", {}).get("values", {})
-            verified_row = summary.get("Verified Leads", {}).get("values", {})
-            for pub_name in pr.get("programs", []):  # publisher_reports uses "programs" as publisher columns
-                row = out[p].setdefault(pub_name, _blank_row())
-                row["total_leads"] += int(total_row.get(pub_name, 0) or 0)
-                row["verified_leads"] += int(verified_row.get(pub_name, 0) or 0)
+    for p in programs:
+        pr = publisher_reports.get(p)
+        if not pr:
+            continue
+        summary = {s.get("label"): s for s in pr.get("summary", [])}
+        total_row = summary.get("Total Leads", {}).get("values", {})
+        verified_row = summary.get("Verified Leads", {}).get("values", {})
+        for pub_name in pr.get("programs", []):  # publisher_reports uses "programs" as publisher columns
+            row = out[p].setdefault(pub_name, _blank_row())
+            row["total_leads"] += int(total_row.get(pub_name, 0) or 0)
+            row["verified_leads"] += int(verified_row.get(pub_name, 0) or 0)
 
     for rec in applicant_records:
         p, pub = rec.get("program"), rec.get("publisher") or "UNKNOWN"
