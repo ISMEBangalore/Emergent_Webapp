@@ -4,9 +4,11 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Archive, Snowflake, ArrowsLeftRight, Warning, Trash } from "@phosphor-icons/react";
+import { ArrowLeft, Archive, Snowflake, ArrowsLeftRight, Warning, Trash, FunnelSimple, ChartLineUp } from "@phosphor-icons/react";
 import { fmtInt } from "@/lib/format";
 import { Chips, FunnelTable, mergeAllPrograms, seasonRangeLabel } from "@/components/VerifiedLeadFunnelTable";
+import { ReportTabs } from "@/components/ReportTabs";
+import { KpiCards } from "@/components/KpiCards";
 
 const StatusBadge = ({ frozen }) =>
   frozen ? (
@@ -29,6 +31,11 @@ export default function SeasonArchive() {
   const [loadingSelected, setLoadingSelected] = useState(false);
   const [prog, setProg] = useState("All");
   const [freezing, setFreezing] = useState(false);
+
+  const [viewMode, setViewMode] = useState("funnel"); // "funnel" | "report"
+  const [reportData, setReportData] = useState(null);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [reportLoadedFor, setReportLoadedFor] = useState("");
 
   const [compareA, setCompareA] = useState("");
   const [compareB, setCompareB] = useState("");
@@ -54,6 +61,9 @@ export default function SeasonArchive() {
   const selectSeason = async (id) => {
     setSelectedId(id);
     setLoadingSelected(true);
+    setViewMode("funnel");
+    setReportData(null);
+    setReportLoadedFor("");
     try {
       const d = await api.getSeasonAnalysis(id);
       setSelectedData(d);
@@ -64,12 +74,34 @@ export default function SeasonArchive() {
     }
   };
 
+  const loadReport = async (id) => {
+    if (reportLoadedFor === id) return;
+    setLoadingReport(true);
+    try {
+      const d = await api.getSeasonReport(id);
+      setReportData(d);
+      setReportLoadedFor(id);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not load the full report for this season.");
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  const showViewMode = (mode) => {
+    setViewMode(mode);
+    if (mode === "report" && selectedId) loadReport(selectedId);
+  };
+
   const freezeSelected = async () => {
     if (!selectedId) return;
     setFreezing(true);
     try {
       const d = await api.freezeSeason(selectedId);
       setSelectedData(d);
+      setReportData(null);
+      setReportLoadedFor("");
+      if (viewMode === "report") loadReport(selectedId);
       toast.success(`Froze "${d.season?.label}" — it's now a permanent, instant-loading snapshot.`);
       await loadSeasons();
     } catch (err) {
@@ -232,15 +264,47 @@ export default function SeasonArchive() {
               <div className="h-72 bg-slate-100 rounded-md animate-pulse mb-6" />
             ) : selectedData ? (
               <div className="mb-8">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <Chips options={progOptions} value={prog} onChange={setProg} testidPrefix="archive-prog" />
-                  <p className="text-xs text-slate-400">
-                    {fmtInt(selectedData.reports_included)} report{selectedData.reports_included === 1 ? "" : "s"} · {fmtInt(selectedData.applications_included)} application{selectedData.applications_included === 1 ? "" : "s"} in range
-                  </p>
+                <div className="inline-flex rounded-md border border-slate-200 bg-white p-1 mb-4" data-testid="archive-viewmode-toggle">
+                  <button
+                    onClick={() => showViewMode("funnel")}
+                    data-testid="archive-viewmode-funnel"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                      viewMode === "funnel" ? "bg-[#002FA7] text-white" : "text-slate-600 hover:text-[#002FA7]"
+                    }`}
+                  >
+                    <FunnelSimple size={15} weight="bold" /> VLA Funnel
+                  </button>
+                  <button
+                    onClick={() => showViewMode("report")}
+                    data-testid="archive-viewmode-report"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                      viewMode === "report" ? "bg-[#002FA7] text-white" : "text-slate-600 hover:text-[#002FA7]"
+                    }`}
+                  >
+                    <ChartLineUp size={15} weight="bold" /> Full Report
+                  </button>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-md p-5">
-                  <FunnelTable rows={rows} testid="archive-funnel-table" />
-                </div>
+
+                {viewMode === "funnel" ? (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                      <Chips options={progOptions} value={prog} onChange={setProg} testidPrefix="archive-prog" />
+                      <p className="text-xs text-slate-400">
+                        {fmtInt(selectedData.reports_included)} report{selectedData.reports_included === 1 ? "" : "s"} · {fmtInt(selectedData.applications_included)} application{selectedData.applications_included === 1 ? "" : "s"} in range
+                      </p>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-md p-5">
+                      <FunnelTable rows={rows} testid="archive-funnel-table" />
+                    </div>
+                  </>
+                ) : loadingReport ? (
+                  <div className="h-72 bg-slate-100 rounded-md animate-pulse" data-testid="archive-report-loading" />
+                ) : reportData ? (
+                  <div data-testid="archive-report-view">
+                    <KpiCards kpis={reportData.kpis} />
+                    <ReportTabs result={reportData.result} />
+                  </div>
+                ) : null}
               </div>
             ) : null
           )}
