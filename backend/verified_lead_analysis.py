@@ -13,6 +13,7 @@ Two data sources feed this, on purpose kept separate:
     be trusted for "Joined"."""
 from __future__ import annotations
 
+import io
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -169,41 +170,68 @@ def build_funnel(reports: List[Dict[str, Any]], applicant_records: List[Dict[str
     return result
 
 
+def _read_all_data_sheets(content: bytes) -> pd.DataFrame:
+    """Joined-students exports sometimes split by program across separate sheets
+    (e.g. 'BBA Joined' / 'B.Com Joined' in one workbook) instead of one flat
+    list — concatenate every sheet that has an Application No or Name column,
+    rather than picking just the largest one like read_data_sheet does."""
+    frames = []
+    xls = pd.ExcelFile(io.BytesIO(content), engine="calamine")
+    for name in xls.sheet_names:
+        sheet = xls.parse(name)
+        if len(sheet) == 0:
+            continue
+        if _find_col(sheet, APP_NO_CANDS, prefer_data=True) is None and \
+           _find_col(sheet, NAME_CANDS, prefer_data=True) is None:
+            continue
+        frames.append(sheet)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
 def match_joined_students(upload_bytes: bytes, records: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Parses a 'final students who reported' file and marks matching
-    applicant_records as joined, preferring Application No, falling back to
-    Name. Returns which records matched (for a DB update) plus a summary."""
-    df = read_data_sheet(upload_bytes)
+    applicant_records as joined: Application No per row, falling back to Name
+    only for that same row when the App No doesn't resolve. Name fallback only
+    trusts names that are unique across the whole applicant pool — a common
+    first name (e.g. two different "ADITYA"s in different programs) must never
+    cross-match a student who isn't actually on the joined list."""
+    df = _read_all_data_sheets(upload_bytes)
+    if len(df) == 0:
+        raise ValueError("Couldn't find any usable rows in this file.")
     col_appno = _find_col(df, APP_NO_CANDS, prefer_data=True)
     col_name = _find_col(df, NAME_CANDS, prefer_data=True)
     if col_appno is None and col_name is None:
         raise ValueError("Couldn't find an Application No or Name column in this file.")
 
-    upload_app_nos = set(_norm(df[col_appno])) if col_appno is not None else set()
-    upload_app_nos.discard("")
-    upload_names = set(_norm_name(df[col_name])) if col_name is not None else set()
-    upload_names.discard("")
+    appnos = _norm(df[col_appno]) if col_appno is not None else pd.Series([""] * len(df))
+    names = _norm_name(df[col_name]) if col_name is not None else pd.Series([""] * len(df))
 
     by_appno = {r["app_no"]: r for r in records if r.get("app_no")}
-    by_name = {r["name"]: r for r in records if r.get("name")}
+    name_counts: Dict[str, int] = {}
+    for r in records:
+        n = r.get("name")
+        if n:
+            name_counts[n] = name_counts.get(n, 0) + 1
+    by_unique_name = {r["name"]: r for r in records if r.get("name") and name_counts[r["name"]] == 1}
 
     matched_ids: List[Any] = []
-    matched_keys = set()
-    for app_no in upload_app_nos:
-        r = by_appno.get(app_no)
-        if r is not None:
+    matched_id_set = set()
+    unmatched_by_appno = 0
+    for i in range(len(df)):
+        app_no, name = appnos.iloc[i], names.iloc[i]
+        r = by_appno.get(app_no) if app_no else None
+        if r is None:
+            unmatched_by_appno += 1
+            r = by_unique_name.get(name) if name else None
+        if r is not None and r["_id"] not in matched_id_set:
             matched_ids.append(r["_id"])
-            matched_keys.add(("appno", app_no))
-    unmatched_by_appno = upload_app_nos - {k[1] for k in matched_keys}
-    for name in upload_names & set(by_name.keys()):
-        r = by_name[name]
-        if r["_id"] not in matched_ids:
-            matched_ids.append(r["_id"])
+            matched_id_set.add(r["_id"])
 
-    total_upload_rows = len(df)
     return {
         "matched_ids": matched_ids,
         "matched_count": len(matched_ids),
-        "total_upload_rows": total_upload_rows,
-        "unmatched_by_appno_count": len(unmatched_by_appno) if col_appno is not None else None,
+        "total_upload_rows": len(df),
+        "unmatched_by_appno_count": unmatched_by_appno if col_appno is not None else None,
     }
