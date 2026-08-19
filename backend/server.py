@@ -77,6 +77,33 @@ def _kpis(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def _store_applicant_records(report_id: str, week_date: Optional[str], records: List[Dict[str, Any]]) -> None:
+    """Upserts by Application No rather than replacing this report's slice outright:
+    the Applications file is a cumulative season-to-date export re-uploaded every
+    week, so the same application shows up in many reports — upsert keeps exactly
+    one row per Application No (refreshed to the latest publisher/program/admission
+    status seen) instead of piling up a duplicate every week, and never clobbers a
+    joined=True flag a Joined-students upload already set. Rows with no Application
+    No can't be deduplicated this way, so they fall back to a per-report replace."""
+    dated = [r for r in records if r.get("app_no")]
+    undated = [r for r in records if not r.get("app_no")]
+
+    for r in dated:
+        doc = {k: v for k, v in r.items() if k != "joined"}
+        doc.update(report_id=report_id, week_date=week_date)
+        await db.applicant_records.update_one(
+            {"app_no": r["app_no"]},
+            {"$set": doc, "$setOnInsert": {"joined": False}},
+            upsert=True,
+        )
+
+    await db.applicant_records.delete_many({"report_id": report_id, "app_no": ""})
+    if undated:
+        await db.applicant_records.insert_many([
+            {**r, "report_id": report_id, "week_date": week_date} for r in undated
+        ])
+
+
 async def _match_and_flag_joined(joined_bytes: bytes, rec_query: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Matches an uploaded 'final students who reported' file against every
     applicant_records row in scope (not just one report's) and flags the
@@ -115,11 +142,8 @@ async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
         await db.reports.update_one({"id": report_id}, {"$set": update})
         # applicant_records lives in its own collection (not the report doc) so the Joined-
         # students upload can update individual records by _id without rewriting the report.
-        await db.applicant_records.delete_many({"report_id": report_id})
         if applicant_records:
-            await db.applicant_records.insert_many([
-                {**r, "report_id": report_id, "week_date": week_date} for r in applicant_records
-            ])
+            await _store_applicant_records(report_id, week_date, applicant_records)
         if joined_bytes:
             # Matched against every applicant_records row seen so far, not just this
             # report's — a student can join weeks after the report that logged their
@@ -566,7 +590,10 @@ async def delete_report(report_id: str):
     file_ids = ([doc["lead_file_id"]] if doc.get("lead_file_id") else []) + doc.get("app_file_ids", [])
     if file_ids:
         await _delete_gridfs_files(file_ids)
-    await db.applicant_records.delete_many({"report_id": report_id})
+    # applicant_records is deduplicated by Application No across every report that has
+    # ever mentioned it (cumulative Applications exports), so report_id there just means
+    # "most recently seen in" — deleting this report must not cascade-delete data that
+    # other reports also contributed to.
     return {"deleted": True}
 
 
@@ -706,6 +733,22 @@ async def delete_view(view_id: str):
 
 
 # ---------------- Verified Lead Analysis ----------------
+def _applicant_date_query(start: Optional[str], end: Optional[str]) -> Dict[str, Any]:
+    """Scopes applicant_records by each row's real application date (app_date),
+    not week_date — week_date on a record just means "last report that saw it,"
+    since Applications files are cumulative exports re-uploaded every week. Records
+    where no date column could be found (app_date is null) are always included
+    rather than silently dropped by a range filter we can't actually verify."""
+    if not (start or end):
+        return {}
+    date_cond: Dict[str, Any] = {}
+    if start:
+        date_cond["$gte"] = start
+    if end:
+        date_cond["$lte"] = end
+    return {"$or": [{"app_date": None}, {"app_date": date_cond}]}
+
+
 async def _build_verified_lead_analysis(start: Optional[str] = None, end: Optional[str] = None) -> Dict[str, Any]:
     """Publisher x program funnel: Total Leads / Verified Leads (from each report's
     already-computed publisher_reports) summed against Application / Admission Fee
@@ -734,15 +777,7 @@ async def _build_verified_lead_analysis(start: Optional[str] = None, end: Option
 
     reports = [r for r in reports if in_range(r.get("week_date"))]
 
-    rec_query: Dict[str, Any] = {}
-    wd_q: Dict[str, Any] = {}
-    if start:
-        wd_q["$gte"] = start
-    if end:
-        wd_q["$lte"] = end
-    if wd_q:
-        rec_query["week_date"] = wd_q
-    records = await db.applicant_records.find(rec_query, {"_id": 0}).to_list(50000)
+    records = await db.applicant_records.find(_applicant_date_query(start, end), {"_id": 0}).to_list(50000)
 
     funnel = await asyncio.to_thread(build_funnel, reports, records, programs)
     return {
@@ -773,17 +808,8 @@ async def upload_joined_students(
     end = _validate_date(end, "end")
     upload_bytes = await file.read()
 
-    rec_query: Dict[str, Any] = {}
-    wd_q: Dict[str, Any] = {}
-    if start:
-        wd_q["$gte"] = start
-    if end:
-        wd_q["$lte"] = end
-    if wd_q:
-        rec_query["week_date"] = wd_q
-
     try:
-        return await _match_and_flag_joined(upload_bytes, rec_query)
+        return await _match_and_flag_joined(upload_bytes, _applicant_date_query(start, end))
     except ValueError as e:
         raise HTTPException(400, str(e))
 

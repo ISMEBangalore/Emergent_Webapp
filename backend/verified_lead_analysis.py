@@ -61,18 +61,26 @@ def extract_applicant_records(files: List[bytes], settings: Dict[str, Any],
         if len(df) == 0:
             continue
 
-        if d_start or d_end:
-            col_date = _find_col(df, APP_DATE_CANDS, prefer_data=True)
-            if col_date is not None:
-                parsed = pd.to_datetime(df[col_date], errors="coerce", dayfirst=True)
-                keep = pd.Series(True, index=df.index)
-                if d_start:
-                    keep &= parsed >= pd.Timestamp(d_start)
-                if d_end:
-                    keep &= parsed < (pd.Timestamp(d_end) + pd.Timedelta(days=1))
-                df = df[keep.fillna(False)].reset_index(drop=True)
-                if len(df) == 0:
-                    continue
+        # Captured regardless of whether a date filter is active: this is each row's
+        # real application date, used later to scope the Verified Lead Analysis funnel
+        # by date even though the Applications file itself is a cumulative season-to-
+        # date export re-uploaded every week (so a report's own week_date reflects
+        # "last seen," not "when this application actually happened").
+        col_date = _find_col(df, APP_DATE_CANDS, prefer_data=True)
+        app_date = (pd.to_datetime(df[col_date], errors="coerce", dayfirst=True)
+                   if col_date is not None else pd.Series([pd.NaT] * len(df), index=df.index))
+
+        if (d_start or d_end) and col_date is not None:
+            keep = pd.Series(True, index=df.index)
+            if d_start:
+                keep &= app_date >= pd.Timestamp(d_start)
+            if d_end:
+                keep &= app_date < (pd.Timestamp(d_end) + pd.Timedelta(days=1))
+            keep = keep.fillna(False)
+            df = df[keep].reset_index(drop=True)
+            app_date = app_date[keep].reset_index(drop=True)
+            if len(df) == 0:
+                continue
 
         col_pay = _find_col(df, PAY_STATUS_CANDS, prefer_data=True)
         if col_pay is None:
@@ -116,10 +124,12 @@ def extract_applicant_records(files: List[bytes], settings: Dict[str, Any],
             p = prog.values[i]
             if p is None:
                 continue
+            ts = app_date.iloc[i]
             records.append({
                 "app_no": app_no.iloc[i], "name": name.iloc[i],
                 "publisher": publisher.iloc[i], "program": p,
                 "admission_paid": bool(admitted.iloc[i]), "joined": False,
+                "app_date": ts.strftime("%Y-%m-%d") if pd.notna(ts) else None,
             })
 
     return records
