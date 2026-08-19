@@ -21,6 +21,7 @@ from starlette.middleware.cors import CORSMiddleware
 from auth import TokenData, bootstrap_admin, create_access_token, get_current_user, verify_password
 from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports
 from apps_parser import parse_application_files
+from application_insights import evaluate_alerts, merge_buckets, parse_insights, summarize_bucket
 from excel_export import build_workbook
 
 mongo_url = os.environ["MONGO_URL"]
@@ -83,16 +84,18 @@ async def _process(report_id: str, lead_bytes: bytes, app_files: List[bytes],
     try:
         if preset_app_counts is not None:
             app_counts = preset_app_counts
+            insight_buckets = None
         else:
             app_counts = await asyncio.to_thread(parse_application_files, app_files, settings, date_range) if app_files else {}
+            insight_buckets = await asyncio.to_thread(parse_insights, app_files, settings, date_range) if app_files else None
         result = await asyncio.to_thread(
             compute_report, lead_bytes, settings, amount_spent, additional_attributed, app_counts, date_range
         )
-        await db.reports.update_one(
-            {"id": report_id},
-            {"$set": {"status": "ready", "result": result, "application_counts": app_counts.get("by_program", app_counts),
-                      "kpis": _kpis(result), "date_range": date_range or {}, "updated_at": now_iso()}},
-        )
+        update = {"status": "ready", "result": result, "application_counts": app_counts.get("by_program", app_counts),
+                 "kpis": _kpis(result), "date_range": date_range or {}, "updated_at": now_iso()}
+        if insight_buckets is not None:
+            update["insight_buckets"] = insight_buckets
+        await db.reports.update_one({"id": report_id}, {"$set": update})
     except Exception as e:  # noqa
         logger.exception("report processing failed")
         await db.reports.update_one(
@@ -397,6 +400,119 @@ async def export_cumulative(start: Optional[str] = None, end: Optional[str] = No
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="report_range.xlsx"'},
     )
+
+
+async def _build_insights(start: Optional[str] = None, end: Optional[str] = None) -> Dict[str, Any]:
+    """Aggregates application_insights buckets across all stored reports whose
+    week falls in range. Deliberately independent of any single week's report —
+    the admission fee (the real conversion event this tracks) is often paid
+    weeks after the application fee, in a different report cycle entirely."""
+    start = _validate_date(start, "start")
+    end = _validate_date(end, "end")
+    if start and end and start > end:
+        raise HTTPException(400, "start date must be on or before end date.")
+    settings = await get_settings()
+    programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
+    reports = await db.reports.find(
+        {"status": "ready", "insight_buckets": {"$exists": True}},
+        {"_id": 0, "insight_buckets": 1, "week_date": 1},
+    ).to_list(2000)
+
+    def in_range(r):
+        wd = r.get("week_date") or ""
+        if start and wd < start:
+            return False
+        if end and wd > end:
+            return False
+        return True
+
+    reports = [r for r in reports if in_range(r)]
+    all_bucket = merge_buckets([r["insight_buckets"]["All"] for r in reports if r.get("insight_buckets", {}).get("All")])
+    program_buckets = {
+        p: merge_buckets([r["insight_buckets"][p] for r in reports if r.get("insight_buckets", {}).get(p)])
+        for p in programs
+    }
+    summary = {"All": summarize_bucket(all_bucket)}
+    for p in programs:
+        summary[p] = summarize_bucket(program_buckets[p])
+    return {
+        "programs": programs,
+        "summary": summary,
+        "alerts": evaluate_alerts(all_bucket, program_buckets),
+        "reports_included": len(reports),
+        "date_range": {"start": start, "end": end},
+    }
+
+
+@api_router.get("/insights")
+async def get_insights(start: Optional[str] = None, end: Optional[str] = None):
+    return await _build_insights(start, end)
+
+
+def _build_ai_prompt(data: Dict[str, Any]) -> str:
+    s = data["summary"]["All"]
+    lines = [
+        "You are advising an admissions/marketing team at ISME Bangalore (a business school "
+        "running PGDM and undergraduate programs). Below is aggregate, anonymized data — no "
+        "individual student names or PII — computed from their payment-approved applications.",
+        "",
+        f"Payment-approved applications: {s['applications']}",
+        f"Went on to pay the admission fee: {s['admission_paid']} ({s['admission_conversion_pct']}%)",
+        f"12th-standard score average: {s['pct_12th_avg']} (n={s['pct_12th_sample_size']})",
+        f"Discount coupon usage: {s['discount_usage_pct']}% of applications",
+        "",
+        "Publisher/channel quality (applications submitted -> payment-approved rate):",
+    ]
+    for row in s["publisher_quality"]:
+        lines.append(f"  - {row['name']}: {row['total']} submitted, {row['approval_pct']}% approved")
+    lines.append("")
+    lines.append("Self-reported \"how did you hear about us\" (may differ from tracked channel above):")
+    for row in s["self_reported_source"][:8]:
+        lines.append(f"  - {row['name']}: {row['count']}")
+    lines.append("")
+    for label, key in [("Gender", "gender"), ("Father's occupation", "father_occupation"),
+                       ("Mother's occupation", "mother_occupation"), ("Category", "category"),
+                       ("Hostel requirement", "hostel"), ("Finance mode", "finance")]:
+        lines.append(f"{label}: " + ", ".join(f"{r['name']}={r['count']}" for r in s[key][:6]))
+    lines.append("")
+    if data["alerts"]:
+        lines.append("System-flagged critical items:")
+        for a in data["alerts"]:
+            lines.append(f"  - [{a['severity']}] {a['title']}: {a['message']}")
+    lines.append("")
+    lines.append(
+        "Give concrete, specific recommendations under three sections: Marketing, Branding, and "
+        "Sales/Counseling. Each should reference the actual numbers above, not generic advice. "
+        "Keep it under 350 words total. End with a one-line \"Most urgent\" callout if one item "
+        "clearly matters more than the rest. Reply in PLAIN TEXT only — no markdown, no # headers, "
+        "no ** bold markers, no bullet characters. Use a section name on its own line followed by "
+        "a colon, then plain sentences or hyphen-led lines underneath."
+    )
+    return "\n".join(lines)
+
+
+@api_router.post("/insights/ai")
+async def ai_insights(start: Optional[str] = None, end: Optional[str] = None):
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(503, "AI Insight isn't configured yet — ANTHROPIC_API_KEY is missing.")
+    data = await _build_insights(start, end)
+    if not data["summary"]["All"]["applications"]:
+        raise HTTPException(400, "No payment-approved applications in this range to analyze.")
+    import anthropic
+    prompt = _build_ai_prompt(data)
+    ai_client = anthropic.Anthropic(api_key=api_key)
+    try:
+        msg = await asyncio.to_thread(
+            ai_client.messages.create,
+            model="claude-sonnet-5",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        raise HTTPException(502, f"AI Insight request failed: {e}")
+    text = "".join(getattr(b, "text", "") for b in msg.content)
+    return {"insight": text}
 
 
 @api_router.get("/reports/{report_id}")

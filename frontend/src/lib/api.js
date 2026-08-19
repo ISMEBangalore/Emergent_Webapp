@@ -63,4 +63,6 @@ export const api = {
   getCumulative: (params) => client.get("/reports/cumulative", { params }).then((r) => r.data),
   downloadReport: (id, params = {}) => download(`/reports/${id}/export`, params, "report.xlsx"),
   downloadCumulative: (params) => download("/reports/cumulative/export", params, "report_range.xlsx"),
+  getInsights: (params) => client.get("/insights", { params }).then((r) => r.data),
+  getAiInsight: (params) => client.post("/insights/ai", null, { params, timeout: 60000 }).then((r) => r.data),
 };

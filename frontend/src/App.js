@@ -12,6 +12,7 @@ import Settings from "@/pages/Settings";
 import ComparePage from "@/pages/ComparePage";
 import CumulativeView from "@/pages/CumulativeView";
 import Latest from "@/pages/Latest";
+import ApplicationInsight from "@/pages/ApplicationInsight";
 
 function RequireAuth({ children }) {
   const { isAuthenticated } = useAuth();
@@ -42,6 +43,7 @@ function App() {
                       <Route path="/compare" element={<ComparePage />} />
                       <Route path="/cumulative" element={<CumulativeView />} />
                       <Route path="/latest" element={<Latest />} />
+                      <Route path="/insights" element={<ApplicationInsight />} />
                       <Route path="/settings" element={<Settings />} />
                     </Routes>
                   </Layout>
