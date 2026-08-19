@@ -213,7 +213,9 @@ def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records
             row["admission_pct"] = _pct(vals["admission_fee_paid"], vals["application"])
             row["joined_pct"] = _pct(vals["joined"], vals["admission_fee_paid"])
             rows.append(row)
-        rows.sort(key=lambda r: -r["application"])
+        # Highest Verification % first; publishers with no leads at all (pct is
+        # None, not 0%) sort to the bottom rather than mixing in with real 0%s.
+        rows.sort(key=lambda r: (r["verification_pct"] is None, -(r["verification_pct"] or 0)))
         result[p] = rows
     return result
 

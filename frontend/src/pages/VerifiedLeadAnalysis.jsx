@@ -11,6 +11,7 @@ import {
   ArrowLeft, CalendarBlank, ChartLineUp, CloudArrowUp, FloppyDisk, Trash, ArrowsLeftRight,
 } from "@phosphor-icons/react";
 import { fmtInt, fmtPct1 } from "@/lib/format";
+import { geoRampColor } from "@/lib/geoColors";
 
 const isoDaysAgo = (days) => {
   const d = new Date();
@@ -80,8 +81,50 @@ function mergeAllPrograms(funnel, programs) {
       map[row.publisher] = cur;
     }
   }
-  return Object.values(map).map(withPct).sort((a, b) => b.application - a.application);
+  // Highest Verification % first; publishers with no leads at all (pct is null,
+  // not 0%) sort to the bottom — matches build_funnel's per-program ordering.
+  return Object.values(map).map(withPct).sort((a, b) => {
+    if (a.verification_pct == null && b.verification_pct == null) return 0;
+    if (a.verification_pct == null) return 1;
+    if (b.verification_pct == null) return -1;
+    return b.verification_pct - a.verification_pct;
+  });
 }
+
+// Verification % color scale: reuses the app's sequential blue ramp (same one the
+// Geography tab's choropleth uses) so a high-conversion publisher pops at a glance.
+function verificationFill(pctVal) {
+  if (pctVal === null || pctVal === undefined) return null;
+  return geoRampColor(Math.max(0, Math.min(100, pctVal)) / 100);
+}
+
+function relLuminance(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+function contrastRatio(hexA, hexB) {
+  const [l1, l2] = [relLuminance(hexA), relLuminance(hexB)].sort((a, b) => b - a);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+// Picks whichever of white/dark ink has higher contrast against a given fill,
+// so text stays legible across the whole light-to-dark ramp.
+function textOn(bgHex) {
+  const white = "#ffffff", dark = "#0f172a";
+  return contrastRatio(bgHex, white) >= contrastRatio(bgHex, dark) ? white : dark;
+}
+
+const VerificationCell = ({ pctVal, bold }) => {
+  const fill = verificationFill(pctVal);
+  return (
+    <td
+      className={`${cell} text-right ${bold ? "font-bold" : ""}`}
+      style={fill ? { backgroundColor: fill, color: textOn(fill) } : undefined}
+    >
+      {fmtPct1(pctVal)}
+    </td>
+  );
+};
 
 function totals(rows) {
   const t = rows.reduce((t, r) => ({
@@ -121,7 +164,7 @@ const FunnelTable = ({ rows, testid }) => {
               <td className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
               <td className={`${cell} text-right`}>{fmtInt(r.total_leads)}</td>
               <td className={`${cell} text-right`}>{fmtInt(r.verified_leads)}</td>
-              <td className={pctCell}>{fmtPct1(r.verification_pct)}</td>
+              <VerificationCell pctVal={r.verification_pct} />
               <td className={`${cell} text-right`}>{fmtInt(r.application)}</td>
               <td className={pctCell}>{fmtPct1(r.application_pct)}</td>
               <td className={`${cell} text-right`}>{fmtInt(r.admission_fee_paid)}</td>
@@ -137,7 +180,7 @@ const FunnelTable = ({ rows, testid }) => {
               <td className={cell}>Total</td>
               <td className={`${cell} text-right`}>{fmtInt(t.total_leads)}</td>
               <td className={`${cell} text-right`}>{fmtInt(t.verified_leads)}</td>
-              <td className={pctCell}>{fmtPct1(t.verification_pct)}</td>
+              <VerificationCell pctVal={t.verification_pct} bold />
               <td className={`${cell} text-right`}>{fmtInt(t.application)}</td>
               <td className={pctCell}>{fmtPct1(t.application_pct)}</td>
               <td className={`${cell} text-right`}>{fmtInt(t.admission_fee_paid)}</td>
