@@ -48,6 +48,21 @@ const Chips = ({ options, value, onChange, testidPrefix }) => (
 );
 
 const cell = "border border-slate-200 px-3 py-1.5 text-sm whitespace-nowrap";
+const pctCell = `${cell} text-right text-slate-500`;
+
+// Matches the backend's rounding (round(num/den*100, 2)) so client-computed totals
+// and the "All programs" merge display at the same precision as server-computed rows.
+const pct = (num, den) => (den ? Math.round((num / den) * 10000) / 100 : null);
+
+function withPct(row) {
+  return {
+    ...row,
+    verification_pct: pct(row.verified_leads, row.total_leads),
+    application_pct: pct(row.application, row.total_leads),
+    admission_pct: pct(row.admission_fee_paid, row.application),
+    joined_pct: pct(row.joined, row.admission_fee_paid),
+  };
+}
 
 function mergeAllPrograms(funnel, programs) {
   const map = {};
@@ -65,17 +80,18 @@ function mergeAllPrograms(funnel, programs) {
       map[row.publisher] = cur;
     }
   }
-  return Object.values(map).sort((a, b) => b.application - a.application);
+  return Object.values(map).map(withPct).sort((a, b) => b.application - a.application);
 }
 
 function totals(rows) {
-  return rows.reduce((t, r) => ({
+  const t = rows.reduce((t, r) => ({
     total_leads: t.total_leads + r.total_leads,
     verified_leads: t.verified_leads + r.verified_leads,
     application: t.application + r.application,
     admission_fee_paid: t.admission_fee_paid + r.admission_fee_paid,
     joined: t.joined + r.joined,
   }), { total_leads: 0, verified_leads: 0, application: 0, admission_fee_paid: 0, joined: 0 });
+  return withPct(t);
 }
 
 const FunnelTable = ({ rows, testid }) => {
@@ -88,22 +104,30 @@ const FunnelTable = ({ rows, testid }) => {
             <th className={`${cell} bg-[#9DC3E6] text-left font-bold`}>Source (Publisher)</th>
             <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Total Leads</th>
             <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Verified Leads</th>
+            <th className={`${cell} bg-slate-100 text-right font-bold`}>Verification %</th>
             <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Application</th>
+            <th className={`${cell} bg-slate-100 text-right font-bold`}>Application %</th>
             <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Admission Fee Paid</th>
+            <th className={`${cell} bg-slate-100 text-right font-bold`}>Admissions %</th>
             <th className={`${cell} bg-[#FFE699] text-right font-bold`}>Joined</th>
+            <th className={`${cell} bg-slate-100 text-right font-bold`}>Joined %</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td className={`${cell} text-slate-400 text-center`} colSpan={6}>No data in this range.</td></tr>
+            <tr><td className={`${cell} text-slate-400 text-center`} colSpan={10}>No data in this range.</td></tr>
           ) : rows.map((r) => (
             <tr key={r.publisher} className="hover:bg-slate-50">
               <td className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
               <td className={`${cell} text-right`}>{fmtInt(r.total_leads)}</td>
               <td className={`${cell} text-right`}>{fmtInt(r.verified_leads)}</td>
+              <td className={pctCell}>{fmtPct1(r.verification_pct)}</td>
               <td className={`${cell} text-right`}>{fmtInt(r.application)}</td>
+              <td className={pctCell}>{fmtPct1(r.application_pct)}</td>
               <td className={`${cell} text-right`}>{fmtInt(r.admission_fee_paid)}</td>
+              <td className={pctCell}>{fmtPct1(r.admission_pct)}</td>
               <td className={`${cell} text-right font-semibold text-emerald-700`}>{fmtInt(r.joined)}</td>
+              <td className={pctCell}>{fmtPct1(r.joined_pct)}</td>
             </tr>
           ))}
         </tbody>
@@ -113,9 +137,13 @@ const FunnelTable = ({ rows, testid }) => {
               <td className={cell}>Total</td>
               <td className={`${cell} text-right`}>{fmtInt(t.total_leads)}</td>
               <td className={`${cell} text-right`}>{fmtInt(t.verified_leads)}</td>
+              <td className={pctCell}>{fmtPct1(t.verification_pct)}</td>
               <td className={`${cell} text-right`}>{fmtInt(t.application)}</td>
+              <td className={pctCell}>{fmtPct1(t.application_pct)}</td>
               <td className={`${cell} text-right`}>{fmtInt(t.admission_fee_paid)}</td>
+              <td className={pctCell}>{fmtPct1(t.admission_pct)}</td>
               <td className={`${cell} text-right text-emerald-700`}>{fmtInt(t.joined)}</td>
+              <td className={pctCell}>{fmtPct1(t.joined_pct)}</td>
             </tr>
           </tfoot>
         )}

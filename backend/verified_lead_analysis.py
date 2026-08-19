@@ -139,6 +139,30 @@ def _blank_row() -> Dict[str, Any]:
     return {"total_leads": 0, "verified_leads": 0, "application": 0, "admission_fee_paid": 0, "joined": 0}
 
 
+def _alnum_key(name: str) -> str:
+    return "".join(ch for ch in name.upper() if ch.isalnum())
+
+
+def _program_merge_targets(programs: List[str]) -> Dict[str, str]:
+    """Maps a program to the shortest sibling program its raw name is a variant/
+    specialization spelling of — e.g. "PGDM (MKT/FIN/HR/BA/IA)" -> "PGDM" — so the
+    funnel shows one absolute total per base program. Settings' program_aliases
+    already merges these at row-classification time when configured there, but
+    when a CRM course text was instead added as its own tracked program (so it
+    shows up here as a separate name rather than an alias), this merges those
+    sibling entries for the funnel without touching the main report's columns."""
+    keys = {p: _alnum_key(p) for p in programs}
+    target: Dict[str, str] = {}
+    for p in programs:
+        siblings = [q for q in programs if q != p and keys[q] and keys[p].startswith(keys[q])]
+        target[p] = min(siblings, key=lambda q: len(keys[q])) if siblings else p
+    return target
+
+
+def _pct(num: float, den: float) -> Any:
+    return round(num / den * 100, 2) if den else None
+
+
 def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records: List[Dict[str, Any]],
                  programs: List[str]) -> Dict[str, List[Dict[str, Any]]]:
     """publisher_reports: {program: build_result()-shaped dict}, already snapshot-
@@ -146,24 +170,30 @@ def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records
     structure, not a list of reports to sum — see aggregate_reports' docstring for
     why summing multiple reports would multiply-count leads).
     applicant_records: rows from the applicant_records collection for the same range.
-    Returns {program: [ {publisher, total_leads, verified_leads, application,
-                         admission_fee_paid, joined}, ... ]}"""
-    out: Dict[str, Dict[str, Dict[str, Any]]] = {p: {} for p in programs}
+    Returns {base_program: [ {publisher, total_leads, verified_leads, application,
+                             admission_fee_paid, joined, verification_pct,
+                             application_pct, admission_pct, joined_pct}, ... ]}
+    keyed by base program only — see _program_merge_targets for variants folded in."""
+    merge_target = _program_merge_targets(programs)
+    base_programs = [p for p in programs if merge_target[p] == p]
+    out: Dict[str, Dict[str, Dict[str, Any]]] = {p: {} for p in base_programs}
 
     for p in programs:
         pr = publisher_reports.get(p)
         if not pr:
             continue
+        target = merge_target[p]
         summary = {s.get("label"): s for s in pr.get("summary", [])}
         total_row = summary.get("Total Leads", {}).get("values", {})
         verified_row = summary.get("Verified Leads", {}).get("values", {})
         for pub_name in pr.get("programs", []):  # publisher_reports uses "programs" as publisher columns
-            row = out[p].setdefault(pub_name, _blank_row())
+            row = out[target].setdefault(pub_name, _blank_row())
             row["total_leads"] += int(total_row.get(pub_name, 0) or 0)
             row["verified_leads"] += int(verified_row.get(pub_name, 0) or 0)
 
     for rec in applicant_records:
-        p, pub = rec.get("program"), rec.get("publisher") or "UNKNOWN"
+        p = merge_target.get(rec.get("program"))
+        pub = rec.get("publisher") or "UNKNOWN"
         if p not in out:
             continue
         row = out[p].setdefault(pub, _blank_row())
@@ -174,8 +204,15 @@ def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records
             row["joined"] += 1
 
     result: Dict[str, List[Dict[str, Any]]] = {}
-    for p in programs:
-        rows = [{"publisher": pub, **vals} for pub, vals in out[p].items()]
+    for p in base_programs:
+        rows = []
+        for pub, vals in out[p].items():
+            row = {"publisher": pub, **vals}
+            row["verification_pct"] = _pct(vals["verified_leads"], vals["total_leads"])
+            row["application_pct"] = _pct(vals["application"], vals["total_leads"])
+            row["admission_pct"] = _pct(vals["admission_fee_paid"], vals["application"])
+            row["joined_pct"] = _pct(vals["joined"], vals["admission_fee_paid"])
+            rows.append(row)
         rows.sort(key=lambda r: -r["application"])
         result[p] = rows
     return result

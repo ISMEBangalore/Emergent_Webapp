@@ -783,7 +783,10 @@ async def _build_verified_lead_analysis(start: Optional[str] = None, end: Option
 
     funnel = await asyncio.to_thread(build_funnel, publisher_reports, records, programs)
     return {
-        "programs": programs,
+        # build_funnel folds program-variant spellings (e.g. "PGDM (MKT/FIN/HR/BA/IA)")
+        # into their base program, so the program list returned here is the funnel's
+        # own keys — otherwise the frontend would offer a filter chip with no data.
+        "programs": list(funnel.keys()),
         "funnel": funnel,
         "reports_included": weeks,
         "applications_included": len(records),
