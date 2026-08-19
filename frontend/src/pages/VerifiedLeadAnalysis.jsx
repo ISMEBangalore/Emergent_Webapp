@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   ArrowLeft, CalendarBlank, ChartLineUp, CloudArrowUp, FloppyDisk, Trash, ArrowsLeftRight,
+  CaretUp, CaretDown, CaretUpDown,
 } from "@phosphor-icons/react";
 import { fmtInt, fmtPct1 } from "@/lib/format";
-import { geoRampColor } from "@/lib/geoColors";
+import { rampColor } from "@/lib/geoColors";
 
 const isoDaysAgo = (days) => {
   const d = new Date();
@@ -49,7 +50,6 @@ const Chips = ({ options, value, onChange, testidPrefix }) => (
 );
 
 const cell = "border border-slate-200 px-3 py-1.5 text-sm whitespace-nowrap";
-const pctCell = `${cell} text-right text-slate-500`;
 
 // Matches the backend's rounding (round(num/den*100, 2)) so client-computed totals
 // and the "All programs" merge display at the same precision as server-computed rows.
@@ -81,21 +81,16 @@ function mergeAllPrograms(funnel, programs) {
       map[row.publisher] = cur;
     }
   }
-  // Highest Verification % first; publishers with no leads at all (pct is null,
-  // not 0%) sort to the bottom — matches build_funnel's per-program ordering.
-  return Object.values(map).map(withPct).sort((a, b) => {
-    if (a.verification_pct == null && b.verification_pct == null) return 0;
-    if (a.verification_pct == null) return 1;
-    if (b.verification_pct == null) return -1;
-    return b.verification_pct - a.verification_pct;
-  });
+  return Object.values(map).map(withPct);
 }
 
-// Verification % color scale: reuses the app's sequential blue ramp (same one the
-// Geography tab's choropleth uses) so a high-conversion publisher pops at a glance.
-function verificationFill(pctVal) {
+// Green -> amber -> red grading scale for the four conversion-rate columns, high
+// to low (higher conversion always reads as "better"). Validated colorblind-safe
+// via the dataviz skill's palette checker.
+const GRADE_RAMP = ["#DC2626", "#F59E0B", "#10B981"]; // 0% -> 50% -> 100%
+function gradeColor(pctVal) {
   if (pctVal === null || pctVal === undefined) return null;
-  return geoRampColor(Math.max(0, Math.min(100, pctVal)) / 100);
+  return rampColor(GRADE_RAMP, Math.max(0, Math.min(100, pctVal)) / 100);
 }
 
 function relLuminance(hex) {
@@ -114,8 +109,8 @@ function textOn(bgHex) {
   return contrastRatio(bgHex, white) >= contrastRatio(bgHex, dark) ? white : dark;
 }
 
-const VerificationCell = ({ pctVal, bold }) => {
-  const fill = verificationFill(pctVal);
+const GradeCell = ({ pctVal, bold }) => {
+  const fill = gradeColor(pctVal);
   return (
     <td
       className={`${cell} text-right ${bold ? "font-bold" : ""}`}
@@ -124,6 +119,45 @@ const VerificationCell = ({ pctVal, bold }) => {
       {fmtPct1(pctVal)}
     </td>
   );
+};
+
+// One row of truth for every column: key into a data row, header label/color,
+// and whether it's a percentage (graded + rendered via GradeCell) or a plain count.
+const COLUMNS = [
+  { key: "publisher", label: "Source (Publisher)", headerClass: "bg-[#9DC3E6] text-left" },
+  { key: "total_leads", label: "Total Leads", headerClass: "bg-[#C6EFCE] text-right" },
+  { key: "verified_leads", label: "Verified Leads", headerClass: "bg-[#C6EFCE] text-right" },
+  { key: "verification_pct", label: "Verification %", headerClass: "bg-slate-100 text-right", pct: true },
+  { key: "application", label: "Application", headerClass: "bg-[#C6EFCE] text-right" },
+  { key: "application_pct", label: "Application %", headerClass: "bg-slate-100 text-right", pct: true },
+  { key: "admission_fee_paid", label: "Admission Fee Paid", headerClass: "bg-[#C6EFCE] text-right" },
+  { key: "admission_pct", label: "Admissions %", headerClass: "bg-slate-100 text-right", pct: true },
+  { key: "joined", label: "Joined", headerClass: "bg-[#FFE699] text-right", emphasis: true },
+  { key: "joined_pct", label: "Joined %", headerClass: "bg-slate-100 text-right", pct: true },
+];
+
+// Nulls (no leads/applications to compute a ratio from) always sort last, in
+// either direction, rather than being confused with a genuine 0.
+function sortRows(rows, key, dir) {
+  const sign = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (key === "publisher") {
+      const cmp = String(a.publisher).localeCompare(String(b.publisher));
+      return sign * cmp;
+    }
+    const av = a[key], bv = b[key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return sign * (av - bv);
+  });
+}
+
+const SortIndicator = ({ active, dir }) => {
+  if (!active) return <CaretUpDown size={12} weight="bold" className="text-slate-400" />;
+  return dir === "asc"
+    ? <CaretUp size={12} weight="bold" className="text-[#002FA7]" />
+    : <CaretDown size={12} weight="bold" className="text-[#002FA7]" />;
 };
 
 function totals(rows) {
@@ -138,55 +172,68 @@ function totals(rows) {
 }
 
 const FunnelTable = ({ rows, testid }) => {
+  const [sortKey, setSortKey] = useState("verification_pct");
+  const [sortDir, setSortDir] = useState("desc");
+  const toggleSort = (key) => {
+    if (key === sortKey) { setSortDir((d) => (d === "desc" ? "asc" : "desc")); return; }
+    setSortKey(key);
+    setSortDir("desc");
+  };
+  const sorted = useMemo(() => sortRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
   const t = totals(rows);
   return (
     <div className="overflow-x-auto thin-scroll">
       <table className="border-collapse min-w-full" data-testid={testid}>
         <thead>
           <tr>
-            <th className={`${cell} bg-[#9DC3E6] text-left font-bold`}>Source (Publisher)</th>
-            <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Total Leads</th>
-            <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Verified Leads</th>
-            <th className={`${cell} bg-slate-100 text-right font-bold`}>Verification %</th>
-            <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Application</th>
-            <th className={`${cell} bg-slate-100 text-right font-bold`}>Application %</th>
-            <th className={`${cell} bg-[#C6EFCE] text-right font-bold`}>Admission Fee Paid</th>
-            <th className={`${cell} bg-slate-100 text-right font-bold`}>Admissions %</th>
-            <th className={`${cell} bg-[#FFE699] text-right font-bold`}>Joined</th>
-            <th className={`${cell} bg-slate-100 text-right font-bold`}>Joined %</th>
+            {COLUMNS.map((c) => (
+              <th
+                key={c.key}
+                data-testid={`${testid}-sort-${c.key}`}
+                onClick={() => toggleSort(c.key)}
+                className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95`}
+              >
+                <span className={`inline-flex items-center gap-1 ${c.headerClass.includes("text-left") ? "" : "justify-end w-full"}`}>
+                  {c.label}
+                  <SortIndicator active={sortKey === c.key} dir={sortDir} />
+                </span>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
-            <tr><td className={`${cell} text-slate-400 text-center`} colSpan={10}>No data in this range.</td></tr>
-          ) : rows.map((r) => (
+          {sorted.length === 0 ? (
+            <tr><td className={`${cell} text-slate-400 text-center`} colSpan={COLUMNS.length}>No data in this range.</td></tr>
+          ) : sorted.map((r) => (
             <tr key={r.publisher} className="hover:bg-slate-50">
-              <td className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
-              <td className={`${cell} text-right`}>{fmtInt(r.total_leads)}</td>
-              <td className={`${cell} text-right`}>{fmtInt(r.verified_leads)}</td>
-              <VerificationCell pctVal={r.verification_pct} />
-              <td className={`${cell} text-right`}>{fmtInt(r.application)}</td>
-              <td className={pctCell}>{fmtPct1(r.application_pct)}</td>
-              <td className={`${cell} text-right`}>{fmtInt(r.admission_fee_paid)}</td>
-              <td className={pctCell}>{fmtPct1(r.admission_pct)}</td>
-              <td className={`${cell} text-right font-semibold text-emerald-700`}>{fmtInt(r.joined)}</td>
-              <td className={pctCell}>{fmtPct1(r.joined_pct)}</td>
+              {COLUMNS.map((c) => (
+                c.pct ? (
+                  <GradeCell key={c.key} pctVal={r[c.key]} />
+                ) : c.key === "publisher" ? (
+                  <td key={c.key} className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
+                ) : (
+                  <td key={c.key} className={`${cell} text-right ${c.emphasis ? "font-semibold text-emerald-700" : ""}`}>
+                    {fmtInt(r[c.key])}
+                  </td>
+                )
+              ))}
             </tr>
           ))}
         </tbody>
-        {rows.length > 0 && (
+        {sorted.length > 0 && (
           <tfoot>
             <tr className="bg-slate-50 font-bold">
-              <td className={cell}>Total</td>
-              <td className={`${cell} text-right`}>{fmtInt(t.total_leads)}</td>
-              <td className={`${cell} text-right`}>{fmtInt(t.verified_leads)}</td>
-              <VerificationCell pctVal={t.verification_pct} bold />
-              <td className={`${cell} text-right`}>{fmtInt(t.application)}</td>
-              <td className={pctCell}>{fmtPct1(t.application_pct)}</td>
-              <td className={`${cell} text-right`}>{fmtInt(t.admission_fee_paid)}</td>
-              <td className={pctCell}>{fmtPct1(t.admission_pct)}</td>
-              <td className={`${cell} text-right text-emerald-700`}>{fmtInt(t.joined)}</td>
-              <td className={pctCell}>{fmtPct1(t.joined_pct)}</td>
+              {COLUMNS.map((c) => (
+                c.pct ? (
+                  <GradeCell key={c.key} pctVal={t[c.key]} bold />
+                ) : c.key === "publisher" ? (
+                  <td key={c.key} className={cell}>Total</td>
+                ) : (
+                  <td key={c.key} className={`${cell} text-right ${c.emphasis ? "text-emerald-700" : ""}`}>
+                    {fmtInt(t[c.key])}
+                  </td>
+                )
+              ))}
             </tr>
           </tfoot>
         )}
