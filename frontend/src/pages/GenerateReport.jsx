@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { UploadSimple, FileXls, X, Sparkle, CurrencyInr } from "@phosphor-icons/react";
 
@@ -15,6 +16,7 @@ export default function GenerateReport() {
   const [leadFile, setLeadFile] = useState(null);
   const [appFiles, setAppFiles] = useState([]);
   const [joinedFile, setJoinedFile] = useState(null);
+  const [showJoined, setShowJoined] = useState(false);
   const [amount, setAmount] = useState({});
   const [addAttr, setAddAttr] = useState({});
   const [busy, setBusy] = useState(false);
@@ -88,9 +90,25 @@ export default function GenerateReport() {
 
         <MultiDropzone files={appFiles} setFiles={setAppFiles} />
 
-        <Dropzone label="Joined Students (.xlsx) — optional, final list of who actually reported"
-                  file={joinedFile} onFile={(f) => setJoinedFile(f)} onClear={() => setJoinedFile(null)}
-                  testid="joined-dropzone" />
+        <div>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs uppercase tracking-wide text-slate-500">
+              I also have a Joined Students file for this upload
+            </Label>
+            <Switch
+              data-testid="joined-toggle"
+              checked={showJoined}
+              onCheckedChange={(v) => { setShowJoined(v); if (!v) setJoinedFile(null); }}
+            />
+          </div>
+          {showJoined && (
+            <div className="mt-2">
+              <Dropzone label="Joined Students (.xlsx) — final list of who actually reported"
+                        file={joinedFile} onFile={(f) => setJoinedFile(f)} onClear={() => setJoinedFile(null)}
+                        testid="joined-dropzone" />
+            </div>
+          )}
+        </div>
 
         <div>
           <Label className="text-xs uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
