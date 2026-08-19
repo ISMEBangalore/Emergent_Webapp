@@ -756,7 +756,8 @@ def _applicant_date_query(start: Optional[str], end: Optional[str]) -> Dict[str,
     return {"$or": [{"app_date": None}, {"app_date": date_cond}]}
 
 
-async def _build_verified_lead_analysis(start: Optional[str] = None, end: Optional[str] = None) -> Dict[str, Any]:
+async def _build_verified_lead_analysis(start: Optional[str] = None, end: Optional[str] = None,
+                                        no_baseline: bool = False) -> Dict[str, Any]:
     """Publisher x program funnel: Total Leads / Verified Leads come from
     aggregate_reports' snapshot-diffed publisher_reports (each Lead file is a
     cumulative export too, so this can't just sum every report — see
@@ -764,7 +765,11 @@ async def _build_verified_lead_analysis(start: Optional[str] = None, end: Option
     else. Application / Admission Fee Paid / Joined come from the
     applicant_records collection, already deduplicated by Application No at
     upload time. Always recomputed live from current data — never a frozen
-    snapshot — so a saved season stays accurate as more weeks are uploaded into it."""
+    snapshot — so a saved season stays accurate as more weeks are uploaded into it.
+
+    `no_baseline` is passed straight through to aggregate_reports — set it for a
+    saved Season (see that function's docstring) so its start boundary can never
+    reach back into a different, unrelated season's final snapshot."""
     start = _validate_date(start, "start")
     end = _validate_date(end, "end")
     if start and end and start > end:
@@ -775,7 +780,7 @@ async def _build_verified_lead_analysis(start: Optional[str] = None, end: Option
     reports = await db.reports.find(
         {"status": "ready", "result.publisher_reports": {"$exists": True}}, {"_id": 0},
     ).to_list(2000)
-    agg = await asyncio.to_thread(aggregate_reports, reports, settings, start, end)
+    agg = await asyncio.to_thread(aggregate_reports, reports, settings, start, end, no_baseline)
     publisher_reports = agg.get("publisher_reports") or {}
     weeks = agg.get("data_quality", {}).get("weeks_aggregated", 0)
 
@@ -859,7 +864,7 @@ async def season_verified_lead_analysis(season_id: str):
     season = await db.seasons.find_one({"id": season_id}, {"_id": 0})
     if not season:
         raise HTTPException(404, "Season not found")
-    data = await _build_verified_lead_analysis(season.get("start"), season.get("end"))
+    data = await _build_verified_lead_analysis(season.get("start"), season.get("end"), no_baseline=True)
     data["season"] = season
     return data
 

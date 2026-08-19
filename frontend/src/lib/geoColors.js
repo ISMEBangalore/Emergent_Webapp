@@ -13,15 +13,19 @@ function rgbToHex([r, g, b]) {
   return `#${h(r)}${h(g)}${h(b)}`;
 }
 
-// Continuous interpolation across any ramp of hex stops for a value in [0,1].
-export function rampColor(ramp, t) {
+// Continuous interpolation across a ramp of hex stops for a value in [0,1].
+// `stops` gives each color's position along [0,1] (defaults to evenly spaced) —
+// e.g. [0, 0.3, 1] makes the middle color sit at 30% instead of the midpoint, so
+// one segment covers more of the range than the other.
+export function rampColor(ramp, t, stops) {
   if (t <= 0) return ramp[0];
   if (t >= 1) return ramp[ramp.length - 1];
-  const scaled = t * (ramp.length - 1);
-  const i = Math.floor(scaled);
-  const frac = scaled - i;
+  const pos = stops || ramp.map((_, i) => i / (ramp.length - 1));
+  let i = 0;
+  while (i < pos.length - 2 && t > pos[i + 1]) i++;
+  const frac = (t - pos[i]) / (pos[i + 1] - pos[i]);
   const a = hexToRgb(ramp[i]);
-  const b = hexToRgb(ramp[Math.min(i + 1, ramp.length - 1)]);
+  const b = hexToRgb(ramp[i + 1]);
   return rgbToHex(a.map((v, idx) => v + (b[idx] - v) * frac));
 }
 

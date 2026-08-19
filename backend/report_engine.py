@@ -667,7 +667,8 @@ def _diff_result(end_result: Dict[str, Any], start_result: Optional[Dict[str, An
     )
 
 
-def aggregate_reports(reports, settings, start: Optional[str] = None, end: Optional[str] = None):
+def aggregate_reports(reports, settings, start: Optional[str] = None, end: Optional[str] = None,
+                      no_baseline: bool = False):
     """Each stored report is a full cumulative-to-date CRM export as of its
     week_date, not a delta of that week's new leads/applications - confirmed
     directly with the user, and reproduced (Total Leads tripling across 3
@@ -679,14 +680,23 @@ def aggregate_reports(reports, settings, start: Optional[str] = None, end: Optio
     query shows only what changed in that window rather than the full running
     total. Amount Spent / Additional Attributed are typed in per week (not part
     of the cumulative export) and are summed across every report whose week
-    falls in the window, same as before this fix."""
+    falls in the window, same as before this fix.
+
+    `no_baseline=True` skips the pre-start diff entirely and just shows the
+    latest-in-range snapshot as-is. Use this for a saved Season: a season's
+    `start` marks where a self-contained admissions cycle began, not a rolling
+    window inside one - the closest report before that start could easily be a
+    *different, unrelated* season's final snapshot (e.g. last year's), and
+    diffing against it would silently subtract one season's totals from
+    another's. Rolling presets ("Last 4 weeks") inside a single ongoing season
+    still want the real diff, so this stays opt-in rather than the default."""
     cfg = {**DEFAULT_SETTINGS, **(settings or {})}
     programs = cfg["programs"]
     stage_rows = cfg["stage_rows"]
 
     ready = sorted((r for r in reports if r.get("result")), key=lambda r: r.get("week_date") or "")
     end_candidates = [r for r in ready if not end or (r.get("week_date") or "") <= end]
-    start_candidates = [r for r in ready if start and (r.get("week_date") or "") < start]
+    start_candidates = [] if no_baseline else [r for r in ready if start and (r.get("week_date") or "") < start]
     snapshot_end = end_candidates[-1] if end_candidates else None
     snapshot_start = start_candidates[-1] if start_candidates else None
     window = [r for r in ready if (not start or (r.get("week_date") or "") >= start)

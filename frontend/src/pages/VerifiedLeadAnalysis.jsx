@@ -86,11 +86,15 @@ function mergeAllPrograms(funnel, programs) {
 
 // Green -> amber -> red grading scale for the four conversion-rate columns, high
 // to low (higher conversion always reads as "better"). Validated colorblind-safe
-// via the dataviz skill's palette checker.
-const GRADE_RAMP = ["#DC2626", "#F59E0B", "#10B981"]; // 0% -> 50% -> 100%
+// via the dataviz skill's palette checker. The amber midpoint sits at 30% (not
+// 50%) so the 30-100% band — where most real conversion rates here fall — reads
+// as a gradual green-to-amber fade, while 0-30% is a narrower, faster red ramp
+// that separates poor performers more sharply.
+const GRADE_RAMP = ["#DC2626", "#F59E0B", "#10B981"];
+const GRADE_STOPS = [0, 0.3, 1];
 function gradeColor(pctVal) {
   if (pctVal === null || pctVal === undefined) return null;
-  return rampColor(GRADE_RAMP, Math.max(0, Math.min(100, pctVal)) / 100);
+  return rampColor(GRADE_RAMP, Math.max(0, Math.min(100, pctVal)) / 100, GRADE_STOPS);
 }
 
 function relLuminance(hex) {
