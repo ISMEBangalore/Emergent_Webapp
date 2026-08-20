@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { IndiaChoropleth } from "@/components/IndiaChoropleth";
 import { fmtInt, fmtPct1 } from "@/lib/format";
+import { gradeColor, textOn } from "@/lib/geoColors";
 
 const cell = "border border-slate-200 px-3 py-1.5 text-sm whitespace-nowrap";
 
@@ -86,14 +87,22 @@ export const GeoReportPanel = ({ result }) => {
               </tr>
             </thead>
             <tbody>
-              {stateRows.map(([name, v]) => (
-                <tr key={name} className="hover:bg-slate-50" data-testid={`geo-state-row-${name}`}>
-                  <td className={`${cell} font-medium text-slate-800`}>{name}</td>
-                  <td className={`${cell} text-right`}>{fmtInt(v.leads)}</td>
-                  <td className={`${cell} text-right`}>{fmtInt(v.applications)}</td>
-                  <td className={`${cell} text-right text-slate-500`}>{fmtPct1(v.conversion_pct)}</td>
-                </tr>
-              ))}
+              {stateRows.map(([name, v]) => {
+                const fill = gradeColor(v.conversion_pct);
+                return (
+                  <tr key={name} className="hover:bg-slate-50" data-testid={`geo-state-row-${name}`}>
+                    <td className={`${cell} font-medium text-slate-800`}>{name}</td>
+                    <td className={`${cell} text-right`}>{fmtInt(v.leads)}</td>
+                    <td className={`${cell} text-right`}>{fmtInt(v.applications)}</td>
+                    <td
+                      className={`${cell} text-right`}
+                      style={fill ? { backgroundColor: fill, color: textOn(fill) } : undefined}
+                    >
+                      {fmtPct1(v.conversion_pct)}
+                    </td>
+                  </tr>
+                );
+              })}
               {stateRows.length === 0 && (
                 <tr><td className={`${cell} text-center text-slate-400`} colSpan={4}>No data</td></tr>
               )}

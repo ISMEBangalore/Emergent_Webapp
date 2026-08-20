@@ -39,3 +39,32 @@ export function makeScale(max) {
   if (!max || max <= 0) return () => GEO_EMPTY;
   return (value) => (value > 0 ? geoRampColor(Math.sqrt(value / max)) : GEO_EMPTY);
 }
+
+// Green -> amber -> red grading scale for conversion-rate values, high to low
+// (higher conversion always reads as "better"). Validated colorblind-safe via the
+// dataviz skill's palette checker. The amber midpoint sits at 30% (not 50%) so the
+// 30-100% band — where most real conversion rates here fall — reads as a gradual
+// green-to-amber fade, while 0-30% is a narrower, faster red ramp that separates
+// poor performers more sharply.
+export const GRADE_RAMP = ["#DC2626", "#F59E0B", "#10B981"];
+export const GRADE_STOPS = [0, 0.3, 1];
+export function gradeColor(pctVal) {
+  if (pctVal === null || pctVal === undefined) return null;
+  return rampColor(GRADE_RAMP, Math.max(0, Math.min(100, pctVal)) / 100, GRADE_STOPS);
+}
+
+export function relLuminance(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+export function contrastRatio(hexA, hexB) {
+  const [l1, l2] = [relLuminance(hexA), relLuminance(hexB)].sort((a, b) => b - a);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+// Picks whichever of white/dark ink has higher contrast against a given fill, so
+// text stays legible across the whole light-to-dark ramp.
+export function textOn(bgHex) {
+  const white = "#ffffff", dark = "#0f172a";
+  return contrastRatio(bgHex, white) >= contrastRatio(bgHex, dark) ? white : dark;
+}

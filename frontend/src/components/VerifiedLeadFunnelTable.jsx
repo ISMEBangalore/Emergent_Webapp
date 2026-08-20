@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { CaretUp, CaretDown, CaretUpDown } from "@phosphor-icons/react";
 import { fmtInt, fmtPct1 } from "@/lib/format";
-import { rampColor } from "@/lib/geoColors";
+import { gradeColor, textOn } from "@/lib/geoColors";
 
 // A season with no end date picks up the single latest report system-wide as its
 // snapshot — correct for an ongoing season, but silently wrong for a closed one
@@ -65,35 +65,6 @@ export function mergeAllPrograms(funnel, programs) {
     }
   }
   return Object.values(map).map(withPct);
-}
-
-// Green -> amber -> red grading scale for the four conversion-rate columns, high
-// to low (higher conversion always reads as "better"). Validated colorblind-safe
-// via the dataviz skill's palette checker. The amber midpoint sits at 30% (not
-// 50%) so the 30-100% band — where most real conversion rates here fall — reads
-// as a gradual green-to-amber fade, while 0-30% is a narrower, faster red ramp
-// that separates poor performers more sharply.
-const GRADE_RAMP = ["#DC2626", "#F59E0B", "#10B981"];
-const GRADE_STOPS = [0, 0.3, 1];
-function gradeColor(pctVal) {
-  if (pctVal === null || pctVal === undefined) return null;
-  return rampColor(GRADE_RAMP, Math.max(0, Math.min(100, pctVal)) / 100, GRADE_STOPS);
-}
-
-function relLuminance(hex) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-function contrastRatio(hexA, hexB) {
-  const [l1, l2] = [relLuminance(hexA), relLuminance(hexB)].sort((a, b) => b - a);
-  return (l1 + 0.05) / (l2 + 0.05);
-}
-// Picks whichever of white/dark ink has higher contrast against a given fill,
-// so text stays legible across the whole light-to-dark ramp.
-function textOn(bgHex) {
-  const white = "#ffffff", dark = "#0f172a";
-  return contrastRatio(bgHex, white) >= contrastRatio(bgHex, dark) ? white : dark;
 }
 
 const GradeCell = ({ pctVal, bold }) => {
