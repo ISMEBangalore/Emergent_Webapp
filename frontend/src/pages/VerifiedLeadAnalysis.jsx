@@ -11,7 +11,7 @@ import {
   ArrowLeft, CalendarBlank, ChartLineUp, CloudArrowUp, FloppyDisk, Trash, ArrowsLeftRight, Warning,
 } from "@phosphor-icons/react";
 import { fmtInt } from "@/lib/format";
-import { Chips, FunnelTable, mergeAllPrograms, seasonRangeLabel } from "@/components/VerifiedLeadFunnelTable";
+import { Chips, CompareFunnelTable, FunnelTable, mergeAllPrograms, seasonRangeLabel, seasonShortLabel } from "@/components/VerifiedLeadFunnelTable";
 
 const isoDaysAgo = (days) => {
   const d = new Date();
@@ -401,17 +401,24 @@ export default function VerifiedLeadAnalysis() {
                   <span>Season A and Season B are the same saved season — pick two different ones to compare.</span>
                 </div>
               )}
-              <div className="grid lg:grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-200 rounded-md p-5">
-                  <h4 className="text-sm font-bold text-slate-800">{compareDataA.season?.label}</h4>
-                  <p className="text-xs text-slate-400 mb-3">{seasonRangeLabel(compareDataA.season)}</p>
-                  <FunnelTable rows={compareRowsA || []} testid="vla-compare-table-a" />
+              <div className="bg-white border border-slate-200 rounded-md p-5">
+                <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 mr-2">A ({seasonShortLabel(compareDataA.season)})</span>
+                    <h4 className="inline text-sm font-bold text-slate-800">{compareDataA.season?.label}</h4>
+                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataA.season)}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 mr-2">B ({seasonShortLabel(compareDataB.season)})</span>
+                    <h4 className="inline text-sm font-bold text-slate-800">{compareDataB.season?.label}</h4>
+                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataB.season)}</p>
+                  </div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-md p-5">
-                  <h4 className="text-sm font-bold text-slate-800">{compareDataB.season?.label}</h4>
-                  <p className="text-xs text-slate-400 mb-3">{seasonRangeLabel(compareDataB.season)}</p>
-                  <FunnelTable rows={compareRowsB || []} testid="vla-compare-table-b" />
-                </div>
+                <CompareFunnelTable
+                  rowsA={compareRowsA || []} rowsB={compareRowsB || []}
+                  labelA={seasonShortLabel(compareDataA.season)} labelB={seasonShortLabel(compareDataB.season)}
+                  testid="vla-compare-table"
+                />
               </div>
             </>
           )}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { CaretUp, CaretDown, CaretUpDown } from "@phosphor-icons/react";
 import { fmtInt, fmtPct1 } from "@/lib/format";
 import { gradeColor, rangeOf, textOn } from "@/lib/geoColors";
@@ -10,6 +10,13 @@ import { gradeColor, rangeOf, textOn } from "@/lib/geoColors";
 export function seasonRangeLabel(season) {
   if (!season) return "";
   return `${season.start || "no start"} → ${season.end || "no end"}`;
+}
+
+// A compact per-season column label for the side-by-side compare table — the
+// season's start year if it has one (e.g. "2025"), falling back to its name.
+export function seasonShortLabel(season) {
+  if (season?.start) return season.start.slice(0, 4);
+  return season?.label || "?";
 }
 
 export const Chips = ({ options, value, onChange, testidPrefix }) => (
@@ -67,11 +74,11 @@ export function mergeAllPrograms(funnel, programs) {
   return Object.values(map).map(withPct);
 }
 
-const GradeCell = ({ pctVal, min, max, bold }) => {
+const GradeCell = ({ pctVal, min, max, bold, groupStart }) => {
   const fill = gradeColor(pctVal, min, max);
   return (
     <td
-      className={`${cell} text-right ${bold ? "font-bold" : ""}`}
+      className={`${cell} text-right ${bold ? "font-bold" : ""} ${groupStart ? "border-l-2 border-l-slate-300" : ""}`}
       style={fill ? { backgroundColor: fill, color: textOn(fill) } : undefined}
     >
       {fmtPct1(pctVal)}
@@ -199,6 +206,127 @@ export const FunnelTable = ({ rows, testid }) => {
                     {fmtInt(t[c.key])}
                   </td>
                 )
+              ))}
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+};
+
+// Union of two seasons' rows by publisher, so every publisher present in
+// EITHER season gets one row with both sides available to compare — a
+// publisher missing from one season gets a zero row there rather than being
+// dropped, so a publisher that only ran in one season is still visible.
+function mergeForCompare(rowsA, rowsB) {
+  const blank = (publisher) => withPct({
+    publisher, total_leads: 0, verified_leads: 0, application: 0, admission_fee_paid: 0, joined: 0,
+  });
+  const mapA = Object.fromEntries((rowsA || []).map((r) => [r.publisher, r]));
+  const mapB = Object.fromEntries((rowsB || []).map((r) => [r.publisher, r]));
+  const names = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])];
+  return names.map((publisher) => ({
+    publisher, a: mapA[publisher] || blank(publisher), b: mapB[publisher] || blank(publisher),
+  }));
+}
+
+const METRIC_COLUMNS = COLUMNS.filter((c) => c.key !== "publisher");
+
+// One consolidated table for comparing two seasons side by side — each metric
+// gets a pair of columns (season A's value, season B's value) instead of two
+// entirely separate tables that have to be scrolled independently to line up
+// the same publisher's row on each side.
+export const CompareFunnelTable = ({ rowsA, rowsB, labelA, labelB, testid }) => {
+  const [sortKey, setSortKey] = useState("verification_pct");
+  const [sortDir, setSortDir] = useState("desc");
+  const toggleSort = (key) => {
+    if (key === sortKey) { setSortDir((d) => (d === "desc" ? "asc" : "desc")); return; }
+    setSortKey(key);
+    setSortDir("desc");
+  };
+
+  const merged = useMemo(() => mergeForCompare(rowsA, rowsB), [rowsA, rowsB]);
+  const sorted = useMemo(() => {
+    const sign = sortDir === "asc" ? 1 : -1;
+    return [...merged].sort((x, y) => {
+      if (sortKey === "publisher") return sign * String(x.publisher).localeCompare(String(y.publisher));
+      const xv = x.a[sortKey], yv = y.a[sortKey];
+      if (xv == null && yv == null) return 0;
+      if (xv == null) return 1;
+      if (yv == null) return -1;
+      return sign * (xv - yv);
+    });
+  }, [merged, sortKey, sortDir]);
+
+  const totalsA = totals(rowsA || []);
+  const totalsB = totals(rowsB || []);
+  // Each side graded against its own range only — identical to how the two
+  // tables were colored before merging into one, just laid out side by side now.
+  const rangesA = useMemo(() => {
+    const r = {}; for (const k of PCT_KEYS) r[k] = rangeOf(sorted.map((row) => row.a[k])); return r;
+  }, [sorted]);
+  const rangesB = useMemo(() => {
+    const r = {}; for (const k of PCT_KEYS) r[k] = rangeOf(sorted.map((row) => row.b[k])); return r;
+  }, [sorted]);
+
+  const pairCell = (c, av, bv, rangesForA, rangesForB, bold) => c.pct ? (
+    <>
+      <GradeCell pctVal={av} min={rangesForA[c.key].min} max={rangesForA[c.key].max} bold={bold} groupStart />
+      <GradeCell pctVal={bv} min={rangesForB[c.key].min} max={rangesForB[c.key].max} bold={bold} />
+    </>
+  ) : (
+    <>
+      <td className={`${cell} text-right border-l-2 border-l-slate-300 ${c.emphasis ? `font-semibold ${bold ? "" : "text-emerald-700"}` : ""}`}>{fmtInt(av)}</td>
+      <td className={`${cell} text-right ${c.emphasis ? `font-semibold ${bold ? "" : "text-emerald-700"}` : ""}`}>{fmtInt(bv)}</td>
+    </>
+  );
+
+  return (
+    <div className="overflow-x-auto thin-scroll">
+      <table className="border-collapse min-w-full" data-testid={testid}>
+        <thead>
+          <tr>
+            <th rowSpan={2} data-testid={`${testid}-sort-publisher`} onClick={() => toggleSort("publisher")}
+                className={`${cell} bg-[#9DC3E6] text-left font-bold cursor-pointer select-none hover:brightness-95 align-bottom`}>
+              <span className="inline-flex items-center gap-1">Source (Publisher) <SortIndicator active={sortKey === "publisher"} dir={sortDir} /></span>
+            </th>
+            {METRIC_COLUMNS.map((c) => (
+              <th key={c.key} colSpan={2} data-testid={`${testid}-sort-${c.key}`} onClick={() => toggleSort(c.key)}
+                  className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95 border-l-2 border-l-slate-300`}>
+                <span className="inline-flex items-center justify-end gap-1 w-full">
+                  {c.label} <SortIndicator active={sortKey === c.key} dir={sortDir} />
+                </span>
+              </th>
+            ))}
+          </tr>
+          <tr>
+            {METRIC_COLUMNS.map((c) => (
+              <React.Fragment key={c.key}>
+                <th className={`${cell} ${c.headerClass} text-[11px] font-semibold text-slate-500 text-right border-l-2 border-l-slate-300`} title={labelA}>{labelA}</th>
+                <th className={`${cell} ${c.headerClass} text-[11px] font-semibold text-slate-500 text-right`} title={labelB}>{labelB}</th>
+              </React.Fragment>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.length === 0 ? (
+            <tr><td className={`${cell} text-slate-400 text-center`} colSpan={1 + METRIC_COLUMNS.length * 2}>No data in this range.</td></tr>
+          ) : sorted.map((r) => (
+            <tr key={r.publisher} className="hover:bg-slate-50">
+              <td className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
+              {METRIC_COLUMNS.map((c) => (
+                <React.Fragment key={c.key}>{pairCell(c, r.a[c.key], r.b[c.key], rangesA, rangesB)}</React.Fragment>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        {sorted.length > 0 && (
+          <tfoot>
+            <tr className="bg-slate-50 font-bold">
+              <td className={cell}>Total</td>
+              {METRIC_COLUMNS.map((c) => (
+                <React.Fragment key={c.key}>{pairCell(c, totalsA[c.key], totalsB[c.key], rangesA, rangesB, true)}</React.Fragment>
               ))}
             </tr>
           </tfoot>

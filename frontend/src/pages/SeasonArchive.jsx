@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { ArrowLeft, Archive, Snowflake, ArrowsLeftRight, Warning, Trash, FunnelSimple, ChartLineUp } from "@phosphor-icons/react";
 import { fmtInt } from "@/lib/format";
-import { Chips, FunnelTable, mergeAllPrograms, seasonRangeLabel } from "@/components/VerifiedLeadFunnelTable";
+import { Chips, CompareFunnelTable, FunnelTable, mergeAllPrograms, seasonRangeLabel, seasonShortLabel } from "@/components/VerifiedLeadFunnelTable";
 import { ReportTabs } from "@/components/ReportTabs";
 import { KpiCards } from "@/components/KpiCards";
 
@@ -356,23 +356,30 @@ export default function SeasonArchive() {
                   <span>Season A and Season B are the same saved season — pick two different ones to compare.</span>
                 </div>
               )}
-              <div className="grid lg:grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-200 rounded-md p-5">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-slate-800">{compareDataA.season?.label}</h4>
-                    <StatusBadge frozen={compareDataA.season?.frozen} />
+              <div className="bg-white border border-slate-200 rounded-md p-5">
+                <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-400">A ({seasonShortLabel(compareDataA.season)})</span>
+                      <h4 className="text-sm font-bold text-slate-800">{compareDataA.season?.label}</h4>
+                      <StatusBadge frozen={compareDataA.season?.frozen} />
+                    </div>
+                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataA.season)}</p>
                   </div>
-                  <p className="text-xs text-slate-400 mb-3">{seasonRangeLabel(compareDataA.season)}</p>
-                  <FunnelTable rows={compareRowsA || []} testid="archive-compare-table-a" />
-                </div>
-                <div className="bg-white border border-slate-200 rounded-md p-5">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-slate-800">{compareDataB.season?.label}</h4>
-                    <StatusBadge frozen={compareDataB.season?.frozen} />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-400">B ({seasonShortLabel(compareDataB.season)})</span>
+                      <h4 className="text-sm font-bold text-slate-800">{compareDataB.season?.label}</h4>
+                      <StatusBadge frozen={compareDataB.season?.frozen} />
+                    </div>
+                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataB.season)}</p>
                   </div>
-                  <p className="text-xs text-slate-400 mb-3">{seasonRangeLabel(compareDataB.season)}</p>
-                  <FunnelTable rows={compareRowsB || []} testid="archive-compare-table-b" />
                 </div>
+                <CompareFunnelTable
+                  rowsA={compareRowsA || []} rowsB={compareRowsB || []}
+                  labelA={seasonShortLabel(compareDataA.season)} labelB={seasonShortLabel(compareDataB.season)}
+                  testid="archive-compare-table"
+                />
               </div>
             </>
           )}
