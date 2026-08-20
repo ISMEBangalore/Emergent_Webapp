@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from report_engine import _find_col, city_series, geo_series, program_series, read_data_sheet
+from report_engine import _find_col, city_series, geo_series, program_merge_targets, program_series, read_data_sheet
 
 
 PROG_CANDS = ["Courses Preference", "Course Preference", "Course", "Programme", "Program"]
@@ -40,8 +40,10 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
                             date_range: Dict[str, Any] = None) -> Dict[str, Any]:
     """Returns {"by_program": {...}, "by_publisher": {...}, "by_program_publisher": {prog: {pub: {...}}},
     "by_state": {state: count}, "by_city": {city: count}, "by_program_state"/"by_program_city": {prog: {loc: count}}}."""
-    programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
+    raw_programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
     program_aliases = settings.get("program_aliases") or {}
+    merge_target = program_merge_targets(raw_programs)
+    programs = [p for p in raw_programs if merge_target[p] == p]
     api_pat = [p.upper() for p in settings.get("api_patterns", ["API"])]
     redir_pat = [p.upper() for p in settings.get("redirect_patterns", ["REDIRECT", "PUSH", "WIDGET"])]
     code_field = settings.get("application_code_field_apps")
@@ -110,10 +112,10 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
             col = lut.get(cand.strip().lower())
             if col is None or not df[col].notna().any():
                 continue
-            ps = program_series(df[col], programs, program_aliases)
+            ps = program_series(df[col], raw_programs, program_aliases)
             matched = int(ps.notna().sum())
             if matched > best_matched:
-                best_matched, prog = matched, ps
+                best_matched, prog = matched, ps.map(lambda p: merge_target.get(p, p))
         if prog is None:
             prog = pd.Series([None] * len(df), index=df.index)
         if col_code is not None:

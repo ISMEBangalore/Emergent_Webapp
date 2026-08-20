@@ -121,6 +121,21 @@ def _alnum(s: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", str(s).upper())
 
 
+def program_merge_targets(programs: List[str]) -> Dict[str, str]:
+    """Maps each configured program to the shortest sibling program its raw name
+    is a variant/specialization spelling of - e.g. "PGDM (MKT/FIN/HR/BA/IA)" ->
+    "PGDM" - so a course text like that automatically folds into the base
+    program everywhere (main report, Application Insight, Geography, Verified
+    Lead Analysis) without needing it hand-configured as a program_alias. A
+    program with no such sibling maps to itself."""
+    keys = {p: _alnum(p) for p in programs}
+    target: Dict[str, str] = {}
+    for p in programs:
+        siblings = [q for q in programs if q != p and keys[q] and keys[p].startswith(keys[q])]
+        target[p] = min(siblings, key=lambda q: len(keys[q])) if siblings else p
+    return target
+
+
 def program_series(series: pd.Series, programs: List[str],
                    aliases: Dict[str, List[str]] = None) -> pd.Series:
     """Map a Course/Programme column to one of the configured program names.
@@ -187,8 +202,10 @@ def compute_report(
     date_range: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     cfg = {**DEFAULT_SETTINGS, **(settings or {})}
-    programs: List[str] = cfg["programs"]
+    raw_programs: List[str] = cfg["programs"]
     program_aliases: Dict[str, List[str]] = cfg.get("program_aliases") or {}
+    merge_target = program_merge_targets(raw_programs)
+    programs: List[str] = [p for p in raw_programs if merge_target[p] == p]
     stage_rows: List[str] = cfg["stage_rows"]
     amount_spent = amount_spent or {}
     additional_attributed = additional_attributed or {}
@@ -271,7 +288,10 @@ def compute_report(
 
     # ---- Program (vectorised) ----
     if col_prog is not None:
-        prog = program_series(df[col_prog], programs, program_aliases)
+        # Classify against every raw program spelling (including variants like
+        # "PGDM (MKT/FIN/HR/BA/IA)") so those rows still match something, then fold
+        # the result through merge_target so they land on the base program's column.
+        prog = program_series(df[col_prog], raw_programs, program_aliases).map(lambda p: merge_target.get(p, p))
     else:
         prog = pd.Series([None] * n, index=df.index, dtype="object")
     # Fallback via widget / payment where program still unknown
@@ -691,7 +711,9 @@ def aggregate_reports(reports, settings, start: Optional[str] = None, end: Optio
     another's. Rolling presets ("Last 4 weeks") inside a single ongoing season
     still want the real diff, so this stays opt-in rather than the default."""
     cfg = {**DEFAULT_SETTINGS, **(settings or {})}
-    programs = cfg["programs"]
+    raw_programs = cfg["programs"]
+    merge_target = program_merge_targets(raw_programs)
+    programs = [p for p in raw_programs if merge_target[p] == p]
     stage_rows = cfg["stage_rows"]
 
     ready = sorted((r for r in reports if r.get("result")), key=lambda r: r.get("week_date") or "")

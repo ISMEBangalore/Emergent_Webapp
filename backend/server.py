@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 from auth import TokenData, bootstrap_admin, create_access_token, get_current_user, verify_password
-from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports
+from report_engine import DEFAULT_SETTINGS, compute_report, aggregate_reports, program_merge_targets
 from apps_parser import parse_application_files
 from application_insights import _blank_bucket, evaluate_alerts, parse_insights, subtract_buckets, summarize_bucket
 from verified_lead_analysis import build_funnel, extract_applicant_records, match_joined_students
@@ -470,7 +470,13 @@ async def _build_insights(start: Optional[str] = None, end: Optional[str] = None
     if start and end and start > end:
         raise HTTPException(400, "start date must be on or before end date.")
     settings = await get_settings()
-    programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
+    raw_programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
+    merge_target = program_merge_targets(raw_programs)
+    # insight_buckets are stored already merged (parse_insights folds program
+    # variants like "PGDM (MKT/FIN/HR/BA/IA)" into their base program), so the
+    # filter list returned to the frontend must match those bucket keys - a
+    # not-merged program here would offer a filter chip with no data behind it.
+    programs = [p for p in raw_programs if merge_target[p] == p]
     reports = await db.reports.find(
         {"status": "ready", "insight_buckets": {"$exists": True}},
         {"_id": 0, "insight_buckets": 1, "week_date": 1},
