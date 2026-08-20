@@ -40,6 +40,10 @@ export const Chips = ({ options, value, onChange, testidPrefix }) => (
 );
 
 const cell = "border border-slate-200 px-3 py-1.5 text-sm whitespace-nowrap";
+// Keeps the Source (Publisher) column visible while the rest of a wide table
+// scrolls horizontally underneath it — needs its own opaque background since
+// sticky cells sit above (not on top of the same paint layer as) scrolled content.
+const stickyCol = "sticky left-0 z-10 border-r-2 border-r-slate-300";
 
 // Matches the backend's rounding (round(num/den*100, 2)) so client-computed totals
 // and the "All programs" merge display at the same precision as server-computed rows.
@@ -164,7 +168,7 @@ export const FunnelTable = ({ rows, testid }) => {
                 key={c.key}
                 data-testid={`${testid}-sort-${c.key}`}
                 onClick={() => toggleSort(c.key)}
-                className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95`}
+                className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95 ${c.key === "publisher" ? stickyCol : ""}`}
               >
                 <span className={`inline-flex items-center gap-1 ${c.headerClass.includes("text-left") ? "" : "justify-end w-full"}`}>
                   {c.label}
@@ -183,7 +187,7 @@ export const FunnelTable = ({ rows, testid }) => {
                 c.pct ? (
                   <GradeCell key={c.key} pctVal={r[c.key]} min={ranges[c.key].min} max={ranges[c.key].max} />
                 ) : c.key === "publisher" ? (
-                  <td key={c.key} className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
+                  <td key={c.key} className={`${cell} font-medium text-slate-800 bg-white ${stickyCol}`}>{r.publisher}</td>
                 ) : (
                   <td key={c.key} className={`${cell} text-right ${c.emphasis ? "font-semibold text-emerald-700" : ""}`}>
                     {fmtInt(r[c.key])}
@@ -200,7 +204,7 @@ export const FunnelTable = ({ rows, testid }) => {
                 c.pct ? (
                   <GradeCell key={c.key} pctVal={t[c.key]} min={ranges[c.key].min} max={ranges[c.key].max} bold />
                 ) : c.key === "publisher" ? (
-                  <td key={c.key} className={cell}>Total</td>
+                  <td key={c.key} className={`${cell} bg-slate-50 ${stickyCol}`}>Total</td>
                 ) : (
                   <td key={c.key} className={`${cell} text-right ${c.emphasis ? "text-emerald-700" : ""}`}>
                     {fmtInt(t[c.key])}
@@ -288,7 +292,7 @@ export const CompareFunnelTable = ({ rowsA, rowsB, labelA, labelB, testid }) => 
         <thead>
           <tr>
             <th rowSpan={2} data-testid={`${testid}-sort-publisher`} onClick={() => toggleSort("publisher")}
-                className={`${cell} bg-[#9DC3E6] text-left font-bold cursor-pointer select-none hover:brightness-95 align-bottom`}>
+                className={`${cell} bg-[#9DC3E6] text-left font-bold cursor-pointer select-none hover:brightness-95 align-bottom ${stickyCol}`}>
               <span className="inline-flex items-center gap-1">Source (Publisher) <SortIndicator active={sortKey === "publisher"} dir={sortDir} /></span>
             </th>
             {METRIC_COLUMNS.map((c) => (
@@ -314,7 +318,7 @@ export const CompareFunnelTable = ({ rowsA, rowsB, labelA, labelB, testid }) => 
             <tr><td className={`${cell} text-slate-400 text-center`} colSpan={1 + METRIC_COLUMNS.length * 2}>No data in this range.</td></tr>
           ) : sorted.map((r) => (
             <tr key={r.publisher} className="hover:bg-slate-50">
-              <td className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
+              <td className={`${cell} font-medium text-slate-800 bg-white ${stickyCol}`}>{r.publisher}</td>
               {METRIC_COLUMNS.map((c) => (
                 <React.Fragment key={c.key}>{pairCell(c, r.a[c.key], r.b[c.key], rangesA, rangesB)}</React.Fragment>
               ))}
@@ -324,7 +328,7 @@ export const CompareFunnelTable = ({ rowsA, rowsB, labelA, labelB, testid }) => 
         {sorted.length > 0 && (
           <tfoot>
             <tr className="bg-slate-50 font-bold">
-              <td className={cell}>Total</td>
+              <td className={`${cell} bg-slate-50 ${stickyCol}`}>Total</td>
               {METRIC_COLUMNS.map((c) => (
                 <React.Fragment key={c.key}>{pairCell(c, totalsA[c.key], totalsB[c.key], rangesA, rangesB, true)}</React.Fragment>
               ))}
