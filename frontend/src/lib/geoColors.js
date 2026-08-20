@@ -40,17 +40,30 @@ export function makeScale(max) {
   return (value) => (value > 0 ? geoRampColor(Math.sqrt(value / max)) : GEO_EMPTY);
 }
 
-// Green -> amber -> red grading scale for conversion-rate values, high to low
-// (higher conversion always reads as "better"). Validated colorblind-safe via the
-// dataviz skill's palette checker. The amber midpoint sits at 30% (not 50%) so the
-// 30-100% band — where most real conversion rates here fall — reads as a gradual
-// green-to-amber fade, while 0-30% is a narrower, faster red ramp that separates
-// poor performers more sharply.
+// Green -> amber -> red grading scale for conversion-rate values. Validated
+// colorblind-safe via the dataviz skill's palette checker.
 export const GRADE_RAMP = ["#DC2626", "#F59E0B", "#10B981"];
-export const GRADE_STOPS = [0, 0.3, 1];
-export function gradeColor(pctVal) {
-  if (pctVal === null || pctVal === undefined) return null;
-  return rampColor(GRADE_RAMP, Math.max(0, Math.min(100, pctVal)) / 100, GRADE_STOPS);
+
+// Relative to the actual min/max of the values on screen, not a fixed absolute
+// percentage scale — the highest figure currently shown always reads green, the
+// lowest always reads red, and the rest fade linearly between them. This matters
+// because "good" varies wildly by metric (a 5% conversion rate can be the best
+// state on the board): a fixed 0-100 scale would paint everything red for a
+// column whose real values never approach 100%, while range-relative grading
+// always spreads the full ramp across whatever range is actually present.
+export function gradeColor(pctVal, min, max) {
+  if (pctVal === null || pctVal === undefined || min === null || max === null) return null;
+  if (min === max) return null; // every value on screen ties -> nothing to rank, so nothing to grade
+  const t = (pctVal - min) / (max - min);
+  return rampColor(GRADE_RAMP, Math.max(0, Math.min(1, t)));
+}
+
+// Min/max of a set of values, ignoring null/undefined/NaN — for feeding gradeColor
+// the range of exactly what's currently rendered (one table column, one metric).
+export function rangeOf(values) {
+  const nums = values.filter((v) => typeof v === "number" && !Number.isNaN(v));
+  if (!nums.length) return { min: null, max: null };
+  return { min: Math.min(...nums), max: Math.max(...nums) };
 }
 
 export function relLuminance(hex) {

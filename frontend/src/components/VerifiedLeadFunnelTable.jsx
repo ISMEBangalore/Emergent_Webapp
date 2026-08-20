@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { CaretUp, CaretDown, CaretUpDown } from "@phosphor-icons/react";
 import { fmtInt, fmtPct1 } from "@/lib/format";
-import { gradeColor, textOn } from "@/lib/geoColors";
+import { gradeColor, rangeOf, textOn } from "@/lib/geoColors";
 
 // A season with no end date picks up the single latest report system-wide as its
 // snapshot — correct for an ongoing season, but silently wrong for a closed one
@@ -67,8 +67,8 @@ export function mergeAllPrograms(funnel, programs) {
   return Object.values(map).map(withPct);
 }
 
-const GradeCell = ({ pctVal, bold }) => {
-  const fill = gradeColor(pctVal);
+const GradeCell = ({ pctVal, min, max, bold }) => {
+  const fill = gradeColor(pctVal, min, max);
   return (
     <td
       className={`${cell} text-right ${bold ? "font-bold" : ""}`}
@@ -93,6 +93,7 @@ const COLUMNS = [
   { key: "joined", label: "Joined", headerClass: "bg-[#FFE699] text-right", emphasis: true },
   { key: "joined_pct", label: "Joined %", headerClass: "bg-slate-100 text-right", pct: true },
 ];
+const PCT_KEYS = COLUMNS.filter((c) => c.pct).map((c) => c.key);
 
 // Nulls (no leads/applications to compute a ratio from) always sort last, in
 // either direction, rather than being confused with a genuine 0.
@@ -139,6 +140,13 @@ export const FunnelTable = ({ rows, testid }) => {
   };
   const sorted = useMemo(() => sortRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
   const t = totals(rows);
+  // Per-column range, from the individual publisher rows only (not the Total row) —
+  // so "green" always means "the best publisher actually on screen right now".
+  const ranges = useMemo(() => {
+    const r = {};
+    for (const k of PCT_KEYS) r[k] = rangeOf(sorted.map((row) => row[k]));
+    return r;
+  }, [sorted]);
   return (
     <div className="overflow-x-auto thin-scroll">
       <table className="border-collapse min-w-full" data-testid={testid}>
@@ -166,7 +174,7 @@ export const FunnelTable = ({ rows, testid }) => {
             <tr key={r.publisher} className="hover:bg-slate-50">
               {COLUMNS.map((c) => (
                 c.pct ? (
-                  <GradeCell key={c.key} pctVal={r[c.key]} />
+                  <GradeCell key={c.key} pctVal={r[c.key]} min={ranges[c.key].min} max={ranges[c.key].max} />
                 ) : c.key === "publisher" ? (
                   <td key={c.key} className={`${cell} font-medium text-slate-800`}>{r.publisher}</td>
                 ) : (
@@ -183,7 +191,7 @@ export const FunnelTable = ({ rows, testid }) => {
             <tr className="bg-slate-50 font-bold">
               {COLUMNS.map((c) => (
                 c.pct ? (
-                  <GradeCell key={c.key} pctVal={t[c.key]} bold />
+                  <GradeCell key={c.key} pctVal={t[c.key]} min={ranges[c.key].min} max={ranges[c.key].max} bold />
                 ) : c.key === "publisher" ? (
                   <td key={c.key} className={cell}>Total</td>
                 ) : (

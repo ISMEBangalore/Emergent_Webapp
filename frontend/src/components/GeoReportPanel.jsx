@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { IndiaChoropleth } from "@/components/IndiaChoropleth";
 import { fmtInt, fmtPct1 } from "@/lib/format";
-import { gradeColor, textOn } from "@/lib/geoColors";
+import { gradeColor, rangeOf, textOn } from "@/lib/geoColors";
 
 const cell = "border border-slate-200 px-3 py-1.5 text-sm whitespace-nowrap";
 
@@ -60,6 +60,7 @@ export const GeoReportPanel = ({ result }) => {
 
   const stateRows = sortRows(stateData, metric);
   const cityRows = sortRows(cityData, "applications").slice(0, 15);
+  const conversionRange = rangeOf(stateRows.map(([, v]) => v.conversion_pct));
 
   const metricLabel = METRICS.find((m) => m.value === metric)?.label || "Leads";
 
@@ -88,7 +89,7 @@ export const GeoReportPanel = ({ result }) => {
             </thead>
             <tbody>
               {stateRows.map(([name, v]) => {
-                const fill = gradeColor(v.conversion_pct);
+                const fill = gradeColor(v.conversion_pct, conversionRange.min, conversionRange.max);
                 return (
                   <tr key={name} className="hover:bg-slate-50" data-testid={`geo-state-row-${name}`}>
                     <td className={`${cell} font-medium text-slate-800`}>{name}</td>
