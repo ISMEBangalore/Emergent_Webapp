@@ -76,7 +76,7 @@ export default function History() {
 
       <div className="bg-white border border-slate-200 rounded-md">
         {loading ? (
-          <div className="p-10 text-center text-slate-400">Loading…</div>
+          <div className="p-10 text-center text-slate-500">Loading…</div>
         ) : reports.length === 0 ? (
           <div className="p-16 flex flex-col items-center text-center">
             <ClockCounterClockwise size={36} className="text-slate-300 mb-3" />
@@ -91,13 +91,14 @@ export default function History() {
                    className="flex items-center justify-between px-5 py-4 hover:bg-slate-50 cursor-pointer transition-colors">
                 <div>
                   <p className="font-medium text-slate-800">{r.week_label}</p>
-                  <p className="text-xs text-slate-400">{r.week_date} · {r.source} · {r.lead_filename}</p>
+                  <p className="text-xs text-slate-500">{r.week_date} · {r.source} · {r.lead_filename}</p>
                 </div>
                 <div className="flex items-center gap-6">
                   <StatusBadge status={r.status} />
                   {r.kpis && <span className="text-sm text-slate-500">{fmtInt(r.kpis.total_leads)} leads</span>}
                   {r.kpis && <span className="text-sm text-slate-500 hidden sm:inline">{fmtMoney(r.kpis.blended_cpa)} CPA</span>}
                   <button onClick={(e) => del(r.id, e)} data-testid={`delete-${r.id}`}
+                          aria-label={`Delete report "${r.week_label}"`}
                           className="text-slate-300 hover:text-red-500 transition-colors"><Trash size={18} /></button>
                   <ArrowRight size={16} className="text-slate-300" />
                 </div>

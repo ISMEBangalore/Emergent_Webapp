@@ -63,7 +63,7 @@ export default function Settings() {
   const listField = (label, key, help) => (
     <div>
       <Label className="text-sm font-semibold text-slate-700">{label}</Label>
-      {help && <p className="text-xs text-slate-400 mb-1.5">{help}</p>}
+      {help && <p className="text-xs text-slate-500 mb-1.5">{help}</p>}
       <Input data-testid={`setting-${key}`} value={(s[key] || []).join(", ")}
              onChange={(e) => setS({ ...s, [key]: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
              className="mt-1" />
@@ -99,7 +99,7 @@ export default function Settings() {
         {(s.programs || []).length > 0 && (
           <div className="border-t border-slate-100 pt-5">
             <Label className="text-sm font-semibold text-slate-700">Program aliases</Label>
-            <p className="text-xs text-slate-400 mb-2">
+            <p className="text-xs text-slate-500 mb-2">
               Merge other raw CRM course text into a program above instead of it showing as its own column
               — e.g. "PGDM(MKT/FIN/HR/BA/IA)" as an alias of "PGDM" folds those leads into the PGDM total.
             </p>
@@ -118,9 +118,9 @@ export default function Settings() {
 
         <div className="border-t border-slate-100 pt-5">
           <Label className="text-sm font-semibold text-slate-700">Publishers to include (columns)</Label>
-          <p className="text-xs text-slate-400 mb-2">Pick which publishers appear in the By-Publisher report. None selected = show all detected.</p>
+          <p className="text-xs text-slate-500 mb-2">Pick which publishers appear in the By-Publisher report. None selected = show all detected.</p>
           {avail.publishers.length === 0 ? (
-            <p className="text-xs text-slate-400">Generate a report first to detect publishers from your file.</p>
+            <p className="text-xs text-slate-500">Generate a report first to detect publishers from your file.</p>
           ) : (
             <div className="flex flex-wrap gap-2" data-testid="available-publishers">
               {avail.publishers.map((p) => {
@@ -128,7 +128,7 @@ export default function Settings() {
                 const on = inc.length === 0 || inc.includes(p.name);
                 return (
                   <button key={p.name} data-testid={`pub-chip-${p.name}`} onClick={() => togglePublisher(p.name)}
-                          className={`px-3 py-1 rounded-full text-sm border transition-colors ${on ? "bg-[#002FA7] text-white border-[#002FA7]" : "border-slate-200 text-slate-400 hover:border-[#002FA7]"}`}>
+                          className={`px-3 py-1 rounded-full text-sm border transition-colors ${on ? "bg-[#002FA7] text-white border-[#002FA7]" : "border-slate-200 text-slate-500 hover:border-[#002FA7]"}`}>
                     {p.name} <span className="opacity-60">({p.count.toLocaleString()})</span>
                   </button>
                 );
@@ -143,7 +143,7 @@ export default function Settings() {
 
         <div>
           <Label className="text-sm font-semibold text-slate-700">Verified lead definition</Label>
-          <p className="text-xs text-slate-400 mb-1.5">When is a lead counted as "Verified"?</p>
+          <p className="text-xs text-slate-500 mb-1.5">When is a lead counted as "Verified"?</p>
           <Select value={s.verified_logic} onValueChange={(v) => setS({ ...s, verified_logic: v })}>
             <SelectTrigger data-testid="setting-verified-logic" className="mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -163,7 +163,7 @@ export default function Settings() {
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-sm font-semibold text-slate-700">Exclude TEST leads</Label>
-              <p className="text-xs text-slate-400 mt-0.5">Drop leads whose name/remark/email contains a test keyword (also the "TEST LEADS" stage).</p>
+              <p className="text-xs text-slate-500 mt-0.5">Drop leads whose name/remark/email contains a test keyword (also the "TEST LEADS" stage).</p>
             </div>
             <button type="button" data-testid="setting-exclude-test"
                     onClick={() => setS({ ...s, exclude_test_leads: !s.exclude_test_leads })}
@@ -183,7 +183,7 @@ export default function Settings() {
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-sm font-semibold text-slate-700">Count only payment-approved applications</Label>
-              <p className="text-xs text-slate-400 mt-0.5">When on, an application counts only if its Payment Status is "PAYMENT APPROVED" (then split into with/without code).</p>
+              <p className="text-xs text-slate-500 mt-0.5">When on, an application counts only if its Payment Status is "PAYMENT APPROVED" (then split into with/without code).</p>
             </div>
             <button type="button" data-testid="setting-payment-approved"
                     onClick={() => setS({ ...s, applications_payment_approved_only: !(s.applications_payment_approved_only ?? true) })}

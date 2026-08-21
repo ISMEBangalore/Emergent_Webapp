@@ -144,12 +144,12 @@ const Dropzone = ({ label, file, onFile, onClear, testid }) => (
         <div className="flex items-center gap-2 text-sm text-slate-700">
           <FileXls size={20} weight="fill" color="#10B981" /> {file.name}
         </div>
-        <button onClick={onClear} className="text-slate-400 hover:text-red-500"><X size={16} weight="bold" /></button>
+        <button onClick={onClear} className="text-slate-500 hover:text-red-500"><X size={16} weight="bold" /></button>
       </div>
     ) : (
       <label data-testid={testid}
              className="mt-1.5 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-md bg-slate-50 p-8 cursor-pointer hover:border-[#002FA7] transition-colors">
-        <UploadSimple size={26} className="text-slate-400 mb-2" />
+        <UploadSimple size={26} className="text-slate-500 mb-2" />
         <span className="text-sm text-slate-500">Click to select .xlsx file</span>
         <input type="file" accept=".xlsx,.xls" className="hidden"
                onChange={(e) => e.target.files[0] && onFile(e.target.files[0])} />
@@ -163,7 +163,7 @@ const MultiDropzone = ({ files, setFiles }) => (
     <Label className="text-xs uppercase tracking-wide text-slate-500">Application Dumps (.xlsx) — optional, one per program</Label>
     <label data-testid="app-dropzone"
            className="mt-1.5 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-md bg-slate-50 p-6 cursor-pointer hover:border-[#002FA7] transition-colors">
-      <UploadSimple size={22} className="text-slate-400 mb-1" />
+      <UploadSimple size={22} className="text-slate-500 mb-1" />
       <span className="text-sm text-slate-500">Add application files</span>
       <input type="file" accept=".xlsx,.xls" multiple className="hidden"
              onChange={(e) => setFiles([...files, ...Array.from(e.target.files)])} />
@@ -173,7 +173,7 @@ const MultiDropzone = ({ files, setFiles }) => (
         {files.map((f, i) => (
           <div key={`${f.name}-${f.size}`} className="flex items-center justify-between border border-slate-200 rounded-md px-3 py-2 bg-white text-sm">
             <span className="flex items-center gap-2 text-slate-700"><FileXls size={18} weight="fill" color="#10B981" /> {f.name}</span>
-            <button onClick={() => setFiles(files.filter((_, x) => x !== i))} className="text-slate-400 hover:text-red-500"><X size={14} weight="bold" /></button>
+            <button onClick={() => setFiles(files.filter((_, x) => x !== i))} className="text-slate-500 hover:text-red-500"><X size={14} weight="bold" /></button>
           </div>
         ))}
       </div>

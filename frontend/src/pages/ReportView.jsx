@@ -207,11 +207,11 @@ export default function ReportView() {
             <span className="text-sm font-semibold text-slate-700">Date range — User Registration Date</span>
           </div>
           {dq?.data_date_min ? (
-            <p className="text-xs text-slate-400" data-testid="date-coverage">
+            <p className="text-xs text-slate-500" data-testid="date-coverage">
               This upload covers <b>{dq.data_date_min}</b> → <b>{dq.data_date_max}</b>. Leave dates empty for the complete file.
             </p>
           ) : (
-            <p className="text-xs text-slate-400">No date column detected — the report uses the complete uploaded file.</p>
+            <p className="text-xs text-slate-500">No date column detected — the report uses the complete uploaded file.</p>
           )}
           <div className="flex flex-wrap items-end gap-3 mt-3">
             <div>
@@ -229,7 +229,7 @@ export default function ReportView() {
               <button data-testid="regen-clear" onClick={() => { setRStart(""); setREnd(""); }} className="text-xs text-[#002FA7] underline">Clear (full data)</button>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-2">Regenerate re-runs on the saved upload using your current Settings (selected programs, publishers, rules) — no re-upload needed.</p>
+          <p className="text-xs text-slate-500 mt-2">Regenerate re-runs on the saved upload using your current Settings (selected programs, publishers, rules) — no re-upload needed.</p>
 
           <div className="border-t border-slate-100 mt-4 pt-4">
             <div className="flex items-center gap-1.5 mb-2">
@@ -247,14 +247,14 @@ export default function ReportView() {
                         · {v.programs?.length || 0} prog{(v.start || v.end) ? " · dated" : ""}
                       </span>
                     </button>
-                    <button data-testid={`view-delete-${v.id}`} onClick={() => removeView(v)} className="text-slate-300 hover:text-red-500">
+                    <button data-testid={`view-delete-${v.id}`} onClick={() => removeView(v)} aria-label={`Delete saved view "${v.name}"`} className="text-slate-300 hover:text-red-500">
                       <Trash size={13} weight="bold" />
                     </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-slate-400 mb-3">No saved views yet. Save the current program selection + date range as a one-click view.</p>
+              <p className="text-xs text-slate-500 mb-3">No saved views yet. Save the current program selection + date range as a one-click view.</p>
             )}
             <div className="flex flex-wrap items-center gap-2">
               <Input data-testid="view-name-input" value={viewName} onChange={(e) => setViewName(e.target.value)}
@@ -312,7 +312,7 @@ export default function ReportView() {
                 <FloppyDisk size={16} weight="bold" /> {pubSaving ? "Saving…" : "Recalculate"}
               </Button>
             </div>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-slate-500 mb-4">
               Enter Amount Spent directly, OR a known CPA — total cost = CPA × applied leads. Cost/Application uses applied leads as the application proxy.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">

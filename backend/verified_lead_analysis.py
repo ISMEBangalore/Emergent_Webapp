@@ -139,6 +139,24 @@ def _blank_row() -> Dict[str, Any]:
     return {"total_leads": 0, "verified_leads": 0, "application": 0, "admission_fee_paid": 0, "joined": 0}
 
 
+def _pub_key(name: str) -> str:
+    return (name or "").strip().upper()
+
+
+def _pub_row(bucket: Dict[str, Dict[str, Any]], name: str) -> Dict[str, Any]:
+    """Look up (or create) a publisher's row by a case-insensitive key, so the
+    same publisher spelled differently between the Leads file (kept as-typed)
+    and the Applications file (normalized to upper-case by _norm) still merges
+    into one row instead of silently splitting into a zero-lead ghost row."""
+    key = _pub_key(name)
+    row = bucket.get(key)
+    if row is None:
+        row = _blank_row()
+        row["publisher"] = (name or "UNKNOWN").strip() or "UNKNOWN"
+        bucket[key] = row
+    return row
+
+
 def _alnum_key(name: str) -> str:
     return "".join(ch for ch in name.upper() if ch.isalnum())
 
@@ -187,7 +205,7 @@ def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records
         total_row = summary.get("Total Leads", {}).get("values", {})
         verified_row = summary.get("Verified Leads", {}).get("values", {})
         for pub_name in pr.get("programs", []):  # publisher_reports uses "programs" as publisher columns
-            row = out[target].setdefault(pub_name, _blank_row())
+            row = _pub_row(out[target], pub_name)
             row["total_leads"] += int(total_row.get(pub_name, 0) or 0)
             row["verified_leads"] += int(verified_row.get(pub_name, 0) or 0)
 
@@ -196,7 +214,7 @@ def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records
         pub = rec.get("publisher") or "UNKNOWN"
         if p not in out:
             continue
-        row = out[p].setdefault(pub, _blank_row())
+        row = _pub_row(out[p], pub)
         row["application"] += 1
         if rec.get("admission_paid"):
             row["admission_fee_paid"] += 1
@@ -206,8 +224,8 @@ def build_funnel(publisher_reports: Dict[str, Dict[str, Any]], applicant_records
     result: Dict[str, List[Dict[str, Any]]] = {}
     for p in base_programs:
         rows = []
-        for pub, vals in out[p].items():
-            row = {"publisher": pub, **vals}
+        for vals in out[p].values():
+            row = dict(vals)
             row["verification_pct"] = _pct(vals["verified_leads"], vals["total_leads"])
             row["application_pct"] = _pct(vals["application"], vals["total_leads"])
             row["admission_pct"] = _pct(vals["admission_fee_paid"], vals["application"])

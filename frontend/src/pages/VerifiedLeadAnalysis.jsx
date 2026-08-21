@@ -119,6 +119,7 @@ export default function VerifiedLeadAnalysis() {
   };
 
   const deleteSeasonById = async (id, label) => {
+    if (!window.confirm(`Delete season "${label}"? This cannot be undone.`)) return;
     try {
       await api.deleteSeason(id);
       toast.success(`Deleted "${label}".`);
@@ -219,7 +220,7 @@ export default function VerifiedLeadAnalysis() {
                 <CalendarBlank size={18} weight="bold" color="#002FA7" />
                 <h3 className="font-display font-bold text-slate-900">Range / Season</h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Select value={activeSeasonId} onValueChange={selectSeason}>
                   <SelectTrigger className="w-56" data-testid="vla-season-select">
                     <SelectValue placeholder="Live (current filters)" />
@@ -228,7 +229,7 @@ export default function VerifiedLeadAnalysis() {
                     <SelectItem value="live">Live (current filters)</SelectItem>
                     {seasons.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.label} <span className="text-slate-400">({seasonRangeLabel(s)})</span>
+                        {s.label} <span className="text-slate-500">({seasonRangeLabel(s)})</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -247,6 +248,7 @@ export default function VerifiedLeadAnalysis() {
                       const s = seasons.find((x) => x.id === activeSeasonId);
                       if (s) deleteSeasonById(s.id, s.label);
                     }}
+                    aria-label={`Delete season "${seasons.find((x) => x.id === activeSeasonId)?.label || ""}"`}
                     className="gap-1.5 text-red-600 hover:text-red-700"
                   >
                     <Trash size={16} weight="bold" />
@@ -341,7 +343,7 @@ export default function VerifiedLeadAnalysis() {
             <>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <Chips options={progOptions} value={prog} onChange={setProg} testidPrefix="vla-prog" />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   {fmtInt(data?.reports_included)} report{data?.reports_included === 1 ? "" : "s"} · {fmtInt(data?.applications_included)} application{data?.applications_included === 1 ? "" : "s"} in range
                 </p>
               </div>
@@ -404,14 +406,14 @@ export default function VerifiedLeadAnalysis() {
               <div className="bg-white border border-slate-200 rounded-md p-5">
                 <div className="grid sm:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <span className="text-xs font-bold text-slate-400 mr-2">A ({seasonShortLabel(compareDataA.season)})</span>
+                    <span className="text-xs font-bold text-slate-500 mr-2">A ({seasonShortLabel(compareDataA.season)})</span>
                     <h4 className="inline text-sm font-bold text-slate-800">{compareDataA.season?.label}</h4>
-                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataA.season)}</p>
+                    <p className="text-xs text-slate-500">{seasonRangeLabel(compareDataA.season)}</p>
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-slate-400 mr-2">B ({seasonShortLabel(compareDataB.season)})</span>
+                    <span className="text-xs font-bold text-slate-500 mr-2">B ({seasonShortLabel(compareDataB.season)})</span>
                     <h4 className="inline text-sm font-bold text-slate-800">{compareDataB.season?.label}</h4>
-                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataB.season)}</p>
+                    <p className="text-xs text-slate-500">{seasonRangeLabel(compareDataB.season)}</p>
                   </div>
                 </div>
                 <CompareFunnelTable

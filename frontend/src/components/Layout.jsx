@@ -22,7 +22,7 @@ const Brand = () => (
     </div>
     <div>
       <p className="font-display font-extrabold text-slate-900 leading-tight tracking-tight">LeadPulse</p>
-      <p className="text-[11px] text-slate-400 tracking-wide uppercase">Weekly CRM Reports</p>
+      <p className="text-[11px] text-slate-500 tracking-wide uppercase">Weekly CRM Reports</p>
     </div>
   </div>
 );
@@ -68,7 +68,7 @@ export const Layout = ({ children }) => {
         <div className="px-6 py-6 border-b border-slate-200"><Brand /></div>
         <nav className="flex-1 px-3 py-4 space-y-1"><NavLinks /></nav>
         <div className="px-6 py-4 border-t border-slate-200">
-          <p className="text-[11px] text-slate-400 mb-2">Data source: merrito.com CRM</p>
+          <p className="text-[11px] text-slate-500 mb-2">Data source: merrito.com CRM</p>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-600 truncate" data-testid="current-username">{username}</span>
             <button

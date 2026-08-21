@@ -74,7 +74,7 @@ const BreakdownList = ({ title, rows, total }) => (
   <div className="bg-white border border-slate-200 rounded-md p-4" data-testid={`breakdown-${title}`}>
     <h4 className="text-sm font-bold text-slate-800 mb-3">{title}</h4>
     {!rows?.length ? (
-      <p className="text-xs text-slate-400">No data</p>
+      <p className="text-xs text-slate-500">No data</p>
     ) : (
       <div className="space-y-2.5">
         {rows.map((r) => {
@@ -83,7 +83,7 @@ const BreakdownList = ({ title, rows, total }) => (
             <div key={r.name}>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-slate-700 font-medium truncate mr-2" title={r.name}>{r.name}</span>
-                <span className="text-slate-400 shrink-0">{fmtInt(r.count)} · {fmtPct1(Math.round(pct * 10) / 10)}</span>
+                <span className="text-slate-500 shrink-0">{fmtInt(r.count)} · {fmtPct1(Math.round(pct * 10) / 10)}</span>
               </div>
               <Bar pct={pct} />
             </div>
@@ -245,7 +245,7 @@ export default function ApplicationInsight() {
 
           <div className="bg-white border border-slate-200 rounded-md p-5 mb-6">
             <h3 className="font-display font-bold text-slate-900 mb-1">Publisher quality</h3>
-            <p className="text-xs text-slate-400 mb-4">Applications submitted vs. payment-approved rate — not just volume.</p>
+            <p className="text-xs text-slate-500 mb-4">Applications submitted vs. payment-approved rate — not just volume.</p>
             <div className="overflow-x-auto thin-scroll">
               <table className="border-collapse min-w-full" data-testid="publisher-quality-table">
                 <thead>
@@ -290,12 +290,12 @@ export default function ApplicationInsight() {
               <p className="font-display text-xl font-bold text-slate-900">
                 {summary.pct_12th_avg ?? "-"}{summary.pct_12th_avg != null && "%"}
               </p>
-              <p className="text-xs text-slate-400 mt-0.5">n = {fmtInt(summary.pct_12th_sample_size)}</p>
+              <p className="text-xs text-slate-500 mt-0.5">n = {fmtInt(summary.pct_12th_sample_size)}</p>
             </div>
             <div className="bg-white border border-slate-200 rounded-md p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Discount coupon usage</p>
               <p className="font-display text-xl font-bold text-slate-900">{fmtPct1(summary.discount_usage_pct)}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{fmtInt(summary.discount_used)} of {fmtInt(summary.discount_total)}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{fmtInt(summary.discount_used)} of {fmtInt(summary.discount_total)}</p>
             </div>
             <div className="bg-white border border-slate-200 rounded-md p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Reports included</p>

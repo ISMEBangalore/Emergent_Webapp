@@ -45,6 +45,20 @@ const cell = "border border-slate-200 px-3 py-1.5 text-sm whitespace-nowrap";
 // sticky cells sit above (not on top of the same paint layer as) scrolled content.
 const stickyCol = "sticky left-0 z-10 border-r-2 border-r-slate-300";
 
+// Makes a clickable sortable <th> keyboard-operable: focusable via Tab, and
+// activatable with Enter/Space like a real button, matching the click handler.
+const sortHeaderProps = (onActivate) => ({
+  onClick: onActivate,
+  tabIndex: 0,
+  role: "button",
+  onKeyDown: (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onActivate();
+    }
+  },
+});
+
 // Matches the backend's rounding (round(num/den*100, 2)) so client-computed totals
 // and the "All programs" merge display at the same precision as server-computed rows.
 const pct = (num, den) => (den ? Math.round((num / den) * 10000) / 100 : null);
@@ -124,7 +138,7 @@ function sortRows(rows, key, dir) {
 }
 
 const SortIndicator = ({ active, dir }) => {
-  if (!active) return <CaretUpDown size={12} weight="bold" className="text-slate-400" />;
+  if (!active) return <CaretUpDown size={12} weight="bold" className="text-slate-500" />;
   return dir === "asc"
     ? <CaretUp size={12} weight="bold" className="text-[#002FA7]" />
     : <CaretDown size={12} weight="bold" className="text-[#002FA7]" />;
@@ -167,8 +181,8 @@ export const FunnelTable = ({ rows, testid }) => {
               <th
                 key={c.key}
                 data-testid={`${testid}-sort-${c.key}`}
-                onClick={() => toggleSort(c.key)}
-                className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95 ${c.key === "publisher" ? stickyCol : ""}`}
+                {...sortHeaderProps(() => toggleSort(c.key))}
+                className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-[#002FA7] focus-visible:ring-inset ${c.key === "publisher" ? stickyCol : ""}`}
               >
                 <span className={`inline-flex items-center gap-1 ${c.headerClass.includes("text-left") ? "" : "justify-end w-full"}`}>
                   {c.label}
@@ -180,7 +194,7 @@ export const FunnelTable = ({ rows, testid }) => {
         </thead>
         <tbody>
           {sorted.length === 0 ? (
-            <tr><td className={`${cell} text-slate-400 text-center`} colSpan={COLUMNS.length}>No data in this range.</td></tr>
+            <tr><td className={`${cell} text-slate-500 text-center`} colSpan={COLUMNS.length}>No data in this range.</td></tr>
           ) : sorted.map((r) => (
             <tr key={r.publisher} className="hover:bg-slate-50">
               {COLUMNS.map((c) => (
@@ -291,13 +305,13 @@ export const CompareFunnelTable = ({ rowsA, rowsB, labelA, labelB, testid }) => 
       <table className="border-collapse min-w-full" data-testid={testid}>
         <thead>
           <tr>
-            <th rowSpan={2} data-testid={`${testid}-sort-publisher`} onClick={() => toggleSort("publisher")}
-                className={`${cell} bg-[#9DC3E6] text-left font-bold cursor-pointer select-none hover:brightness-95 align-bottom ${stickyCol}`}>
+            <th rowSpan={2} data-testid={`${testid}-sort-publisher`} {...sortHeaderProps(() => toggleSort("publisher"))}
+                className={`${cell} bg-[#9DC3E6] text-left font-bold cursor-pointer select-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-[#002FA7] focus-visible:ring-inset align-bottom ${stickyCol}`}>
               <span className="inline-flex items-center gap-1">Source (Publisher) <SortIndicator active={sortKey === "publisher"} dir={sortDir} /></span>
             </th>
             {METRIC_COLUMNS.map((c) => (
-              <th key={c.key} colSpan={2} data-testid={`${testid}-sort-${c.key}`} onClick={() => toggleSort(c.key)}
-                  className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95 border-l-2 border-l-slate-300`}>
+              <th key={c.key} colSpan={2} data-testid={`${testid}-sort-${c.key}`} {...sortHeaderProps(() => toggleSort(c.key))}
+                  className={`${cell} ${c.headerClass} font-bold cursor-pointer select-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-[#002FA7] focus-visible:ring-inset border-l-2 border-l-slate-300`}>
                 <span className="inline-flex items-center justify-end gap-1 w-full">
                   {c.label} <SortIndicator active={sortKey === c.key} dir={sortDir} />
                 </span>
@@ -315,7 +329,7 @@ export const CompareFunnelTable = ({ rowsA, rowsB, labelA, labelB, testid }) => 
         </thead>
         <tbody>
           {sorted.length === 0 ? (
-            <tr><td className={`${cell} text-slate-400 text-center`} colSpan={1 + METRIC_COLUMNS.length * 2}>No data in this range.</td></tr>
+            <tr><td className={`${cell} text-slate-500 text-center`} colSpan={1 + METRIC_COLUMNS.length * 2}>No data in this range.</td></tr>
           ) : sorted.map((r) => (
             <tr key={r.publisher} className="hover:bg-slate-50">
               <td className={`${cell} font-medium text-slate-800 bg-white ${stickyCol}`}>{r.publisher}</td>

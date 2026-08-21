@@ -65,7 +65,7 @@ export const ReportTable = ({ result }) => {
                     <td className={`${cell} text-right`}>
                       {pctOnly ? fmtPct(s.pct?.[p]) : renderVal(s.values?.[p], s.fmt)}
                     </td>
-                    <td className={`${cell} text-center text-slate-400`}>
+                    <td className={`${cell} text-center text-slate-500`}>
                       {!pctOnly && s.pct ? fmtPct(s.pct?.[p]) : ""}
                     </td>
                   </Fragment>

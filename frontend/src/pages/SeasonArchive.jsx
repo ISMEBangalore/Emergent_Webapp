@@ -126,6 +126,7 @@ export default function SeasonArchive() {
   const deleteSelected = async () => {
     if (!selectedId) return;
     const s = seasons.find((x) => x.id === selectedId);
+    if (!window.confirm(`Delete season "${s?.label || "this season"}"? This cannot be undone.`)) return;
     try {
       await api.deleteSeason(selectedId);
       toast.success(`Deleted "${s?.label || "season"}".`);
@@ -212,7 +213,7 @@ export default function SeasonArchive() {
                     <SelectContent>
                       {seasons.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.label} <span className="text-slate-400">({seasonRangeLabel(s)}) {s.frozen ? "❄" : ""}</span>
+                          {s.label} <span className="text-slate-500">({seasonRangeLabel(s)}) {s.frozen ? "❄" : ""}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -233,6 +234,7 @@ export default function SeasonArchive() {
                   )}
                   <Button
                     variant="outline" size="sm" data-testid="archive-delete-btn" onClick={deleteSelected}
+                    aria-label={`Delete season "${selectedSeason.label}"`}
                     className="gap-1.5 text-red-600 hover:text-red-700"
                   >
                     <Trash size={15} weight="bold" />
@@ -289,7 +291,7 @@ export default function SeasonArchive() {
                   <>
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                       <Chips options={progOptions} value={prog} onChange={setProg} testidPrefix="archive-prog" />
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-500">
                         {fmtInt(selectedData.reports_included)} report{selectedData.reports_included === 1 ? "" : "s"} · {fmtInt(selectedData.applications_included)} application{selectedData.applications_included === 1 ? "" : "s"} in range
                       </p>
                     </div>
@@ -325,14 +327,14 @@ export default function SeasonArchive() {
                     <label className="text-xs uppercase tracking-wide text-slate-500 block mb-1.5">Season A</label>
                     <Select value={compareA} onValueChange={setCompareA}>
                       <SelectTrigger className="w-64" data-testid="archive-compare-a-select"><SelectValue placeholder="Choose season" /></SelectTrigger>
-                      <SelectContent>{seasons.map((s) => <SelectItem key={s.id} value={s.id}>{s.label} <span className="text-slate-400">({seasonRangeLabel(s)})</span></SelectItem>)}</SelectContent>
+                      <SelectContent>{seasons.map((s) => <SelectItem key={s.id} value={s.id}>{s.label} <span className="text-slate-500">({seasonRangeLabel(s)})</span></SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
                     <label className="text-xs uppercase tracking-wide text-slate-500 block mb-1.5">Season B</label>
                     <Select value={compareB} onValueChange={setCompareB}>
                       <SelectTrigger className="w-64" data-testid="archive-compare-b-select"><SelectValue placeholder="Choose season" /></SelectTrigger>
-                      <SelectContent>{seasons.map((s) => <SelectItem key={s.id} value={s.id}>{s.label} <span className="text-slate-400">({seasonRangeLabel(s)})</span></SelectItem>)}</SelectContent>
+                      <SelectContent>{seasons.map((s) => <SelectItem key={s.id} value={s.id}>{s.label} <span className="text-slate-500">({seasonRangeLabel(s)})</span></SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <Button data-testid="archive-compare-run" onClick={runCompare} disabled={compareLoading} className="bg-[#002FA7] hover:bg-[#002FA7]/90">
@@ -360,19 +362,19 @@ export default function SeasonArchive() {
                 <div className="grid sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-400">A ({seasonShortLabel(compareDataA.season)})</span>
+                      <span className="text-xs font-bold text-slate-500">A ({seasonShortLabel(compareDataA.season)})</span>
                       <h4 className="text-sm font-bold text-slate-800">{compareDataA.season?.label}</h4>
                       <StatusBadge frozen={compareDataA.season?.frozen} />
                     </div>
-                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataA.season)}</p>
+                    <p className="text-xs text-slate-500">{seasonRangeLabel(compareDataA.season)}</p>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-400">B ({seasonShortLabel(compareDataB.season)})</span>
+                      <span className="text-xs font-bold text-slate-500">B ({seasonShortLabel(compareDataB.season)})</span>
                       <h4 className="text-sm font-bold text-slate-800">{compareDataB.season?.label}</h4>
                       <StatusBadge frozen={compareDataB.season?.frozen} />
                     </div>
-                    <p className="text-xs text-slate-400">{seasonRangeLabel(compareDataB.season)}</p>
+                    <p className="text-xs text-slate-500">{seasonRangeLabel(compareDataB.season)}</p>
                   </div>
                 </div>
                 <CompareFunnelTable

@@ -83,7 +83,7 @@ export default function Dashboard() {
     <PageWrap>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400 mb-1">Latest report</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-1">Latest report</p>
           <h2 className="font-display text-xl font-bold text-slate-900">{latest.week_label}</h2>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -147,7 +147,7 @@ export default function Dashboard() {
                     className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors text-left">
               <div>
                 <p className="font-medium text-slate-800 text-sm">{r.week_label}</p>
-                <p className="text-xs text-slate-400">{r.week_date} · {r.source}</p>
+                <p className="text-xs text-slate-500">{r.week_date} · {r.source}</p>
               </div>
               <div className="flex items-center gap-6 text-sm">
                 <StatusBadge status={r.status} />
@@ -179,7 +179,7 @@ const ChartCard = ({ title, children }) => (
   </div>
 );
 const EmptyChart = ({ label }) => (
-  <div className="h-[280px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-200 rounded-md">{label}</div>
+  <div className="h-[280px] flex items-center justify-center text-slate-500 text-sm border border-dashed border-slate-200 rounded-md">{label}</div>
 );
 export const StatusBadge = ({ status }) => {
   const map = {

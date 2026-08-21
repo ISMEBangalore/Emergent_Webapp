@@ -105,7 +105,7 @@ export const GeoReportPanel = ({ result }) => {
                 );
               })}
               {stateRows.length === 0 && (
-                <tr><td className={`${cell} text-center text-slate-400`} colSpan={4}>No data</td></tr>
+                <tr><td className={`${cell} text-center text-slate-500`} colSpan={4}>No data</td></tr>
               )}
             </tbody>
           </table>
@@ -114,18 +114,18 @@ export const GeoReportPanel = ({ result }) => {
 
       <div className="mt-6 bg-white border border-slate-200 rounded-md p-5">
         <h3 className="font-display font-bold text-slate-900 mb-1">Top performing cities</h3>
-        <p className="text-xs text-slate-400 mb-4">Ranked by applications — the cities actually converting, not just generating traffic.</p>
+        <p className="text-xs text-slate-500 mb-4">Ranked by applications — the cities actually converting, not just generating traffic.</p>
         {cityRows.length === 0 ? (
-          <p className="text-sm text-slate-400">No application data with a city breakdown yet.</p>
+          <p className="text-sm text-slate-500">No application data with a city breakdown yet.</p>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {cityRows.map(([name, v], i) => (
               <div key={name} className="border border-slate-200 rounded-md p-3 flex items-center justify-between"
                    data-testid={`geo-city-${name}`}>
                 <div>
-                  <span className="text-xs text-slate-400 mr-1.5">#{i + 1}</span>
+                  <span className="text-xs text-slate-500 mr-1.5">#{i + 1}</span>
                   <span className="font-semibold text-sm text-slate-800">{name}</span>
-                  <p className="text-xs text-slate-400 mt-0.5">{fmtInt(v.leads)} leads · {fmtPct1(v.conversion_pct)} conv.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{fmtInt(v.leads)} leads · {fmtPct1(v.conversion_pct)} conv.</p>
                 </div>
                 <span className="font-display font-bold text-[#002FA7]">{fmtInt(v.applications)}</span>
               </div>
@@ -135,7 +135,7 @@ export const GeoReportPanel = ({ result }) => {
       </div>
 
       {unknownState && unknownState.leads > 0 && (
-        <p className="text-xs text-slate-400 mt-3">
+        <p className="text-xs text-slate-500 mt-3">
           {fmtInt(unknownState.leads)} lead{unknownState.leads === 1 ? "" : "s"} had no usable State value and are excluded from the map/table above.
         </p>
       )}
