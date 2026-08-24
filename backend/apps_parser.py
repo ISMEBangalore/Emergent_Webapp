@@ -39,7 +39,9 @@ def _blank_counts() -> Dict[str, int]:
 def parse_application_files(files: List[bytes], settings: Dict[str, Any],
                             date_range: Dict[str, Any] = None) -> Dict[str, Any]:
     """Returns {"by_program": {...}, "by_publisher": {...}, "by_program_publisher": {prog: {pub: {...}}},
-    "by_state": {state: count}, "by_city": {city: count}, "by_program_state"/"by_program_city": {prog: {loc: count}}}."""
+    "by_state": {state: count}, "by_city": {city: count}, "by_program_state"/"by_program_city": {prog: {loc: count}},
+    "by_publisher_state"/"by_publisher_city": {pub: {loc: count}},
+    "by_program_publisher_state"/"by_program_publisher_city": {prog: {pub: {loc: count}}}}."""
     raw_programs = settings.get("programs", ["B.Com", "BBA", "PGDM"])
     program_aliases = settings.get("program_aliases") or {}
     merge_target = program_merge_targets(raw_programs)
@@ -58,6 +60,10 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
     by_city: Dict[str, int] = {}
     by_program_state: Dict[str, Dict[str, int]] = {p: {} for p in programs}
     by_program_city: Dict[str, Dict[str, int]] = {p: {} for p in programs}
+    by_publisher_state: Dict[str, Dict[str, int]] = {}
+    by_publisher_city: Dict[str, Dict[str, int]] = {}
+    by_program_publisher_state: Dict[str, Dict[str, Dict[str, int]]] = {p: {} for p in programs}
+    by_program_publisher_city: Dict[str, Dict[str, Dict[str, int]]] = {p: {} for p in programs}
 
     def _bump(target: Dict[str, int], mask) -> None:
         target["with_code"] += int((mask & has_code.values).sum())
@@ -152,15 +158,27 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
             mask = (prog.values == p)
             _bump(by_program[p], mask)
 
+        def _bump_locations(dest_state: Dict[str, int], dest_city: Dict[str, int], loc_mask) -> None:
+            for state_name in pd.unique(state_raw.values[loc_mask]):
+                cnt = int((state_raw.values[loc_mask] == state_name).sum())
+                dest_state[state_name] = dest_state.get(state_name, 0) + cnt
+            for city_name in pd.unique(city_raw.values[loc_mask]):
+                cnt = int((city_raw.values[loc_mask] == city_name).sum())
+                dest_city[city_name] = dest_city.get(city_name, 0) + cnt
+
         for pub_name in pub_raw.unique():
             mask = (pub_raw.values == pub_name)
             by_publisher.setdefault(pub_name, _blank_counts())
             _bump(by_publisher[pub_name], mask)
+            _bump_locations(by_publisher_state.setdefault(pub_name, {}),
+                            by_publisher_city.setdefault(pub_name, {}), mask)
             for p in programs:
                 pmask = mask & (prog.values == p)
                 if pmask.any():
                     by_program_publisher[p].setdefault(pub_name, _blank_counts())
                     _bump(by_program_publisher[p][pub_name], pmask)
+                    _bump_locations(by_program_publisher_state[p].setdefault(pub_name, {}),
+                                    by_program_publisher_city[p].setdefault(pub_name, {}), pmask)
 
         for state_name in state_raw.unique():
             mask = (state_raw.values == state_name)
@@ -186,4 +204,8 @@ def parse_application_files(files: List[bytes], settings: Dict[str, Any],
         "by_program_state": by_program_state,
         "by_program_city": by_program_city,
         "by_program_publisher": by_program_publisher,
+        "by_publisher_state": by_publisher_state,
+        "by_publisher_city": by_publisher_city,
+        "by_program_publisher_state": by_program_publisher_state,
+        "by_program_publisher_city": by_program_publisher_city,
     }

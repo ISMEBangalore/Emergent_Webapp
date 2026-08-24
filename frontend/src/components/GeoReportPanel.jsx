@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { IndiaChoropleth } from "@/components/IndiaChoropleth";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtInt, fmtPct1 } from "@/lib/format";
 import { gradeColor, rangeOf, textOn } from "@/lib/geoColors";
 
@@ -36,15 +37,29 @@ const sortRows = (data, metric) =>
     .filter(([name]) => name !== "UNKNOWN")
     .sort((a, b) => (b[1][metric] ?? -1) - (a[1][metric] ?? -1));
 
+// geo_by_state/geo_by_city are nested [program_or_All][publisher_or_All] -> {location: {...}},
+// so Program-wise, Publisher-wise, and Publisher-per-Program are all the same lookup with
+// different keys - falls back to the program's "All"-publisher slice if a specific
+// program+publisher combination has no precomputed entry (e.g. settings changed since upload).
+const pickGeo = (byLoc, prog, pub) => {
+  const progBucket = (byLoc && (byLoc[prog] || byLoc.All)) || {};
+  return progBucket[pub] || progBucket.All || {};
+};
+
 export const GeoReportPanel = ({ result }) => {
   const byState = result.geo_by_state;
   const byCity = result.geo_by_city;
   const [prog, setProg] = useState("All");
+  const [pub, setPub] = useState("All");
   const [metric, setMetric] = useState("leads");
 
   const progOptions = useMemo(() => ["All", ...(result.programs || [])], [result.programs]);
+  const pubOptions = useMemo(
+    () => ["All", ...Object.keys(byState?.All || {}).filter((k) => k !== "All")],
+    [byState]
+  );
 
-  if (!byState || !Object.keys(byState.All || {}).length) {
+  if (!byState || !Object.keys(byState.All?.All || {}).length) {
     return (
       <div className="border border-dashed border-slate-300 rounded-md p-10 text-center text-slate-500"
            data-testid="geo-empty">
@@ -54,8 +69,8 @@ export const GeoReportPanel = ({ result }) => {
     );
   }
 
-  const stateData = byState[prog] || byState.All;
-  const cityData = (byCity && (byCity[prog] || byCity.All)) || {};
+  const stateData = pickGeo(byState, prog, pub);
+  const cityData = pickGeo(byCity, prog, pub);
   const unknownState = stateData.UNKNOWN;
 
   const stateRows = sortRows(stateData, metric);
@@ -63,17 +78,35 @@ export const GeoReportPanel = ({ result }) => {
   const conversionRange = rangeOf(stateRows.map(([, v]) => v.conversion_pct));
 
   const metricLabel = METRICS.find((m) => m.value === metric)?.label || "Leads";
+  const filterSuffix = [prog !== "All" ? prog : null, pub !== "All" ? pub : null].filter(Boolean).join(" · ");
 
   return (
     <div data-testid="geo-panel">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-        <Chips options={progOptions} value={prog} onChange={setProg} testidPrefix="geo-prog" labelFor="Program" />
+        <div className="flex flex-wrap items-center gap-4">
+          <Chips options={progOptions} value={prog} onChange={setProg} testidPrefix="geo-prog" labelFor="Program" />
+          <div className="flex items-center gap-2" data-testid="geo-pub-filter">
+            <span className="text-xs uppercase tracking-wide text-slate-500">Publisher:</span>
+            <Select value={pub} onValueChange={setPub}>
+              <SelectTrigger className="w-52" data-testid="geo-pub-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pubOptions.map((p) => (
+                  <SelectItem key={p} value={p} data-testid={`geo-pub-opt-${p}`}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <Chips options={METRICS} value={metric} onChange={setMetric} testidPrefix="geo-metric" labelFor="Color by" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-white border border-slate-200 rounded-md p-5">
-          <h3 className="font-display font-bold text-slate-900 mb-3">State-wise ({metricLabel})</h3>
+          <h3 className="font-display font-bold text-slate-900 mb-3">
+            State-wise ({metricLabel}){filterSuffix && <span className="text-slate-500 font-normal"> — {filterSuffix}</span>}
+          </h3>
           <IndiaChoropleth data={stateData} metric={metric} label={metricLabel} />
         </div>
 
@@ -113,7 +146,9 @@ export const GeoReportPanel = ({ result }) => {
       </div>
 
       <div className="mt-6 bg-white border border-slate-200 rounded-md p-5">
-        <h3 className="font-display font-bold text-slate-900 mb-1">Top performing cities</h3>
+        <h3 className="font-display font-bold text-slate-900 mb-1">
+          Top performing cities{filterSuffix && <span className="text-slate-500 font-normal"> — {filterSuffix}</span>}
+        </h3>
         <p className="text-xs text-slate-500 mb-4">Ranked by applications — the cities actually converting, not just generating traffic.</p>
         {cityRows.length === 0 ? (
           <p className="text-sm text-slate-500">No application data with a city breakdown yet.</p>

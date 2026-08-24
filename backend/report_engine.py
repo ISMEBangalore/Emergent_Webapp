@@ -220,6 +220,20 @@ def compute_report(
     apps_by_city = application_counts.get("by_city") or {}
     apps_by_program_state = application_counts.get("by_program_state") or {}
     apps_by_program_city = application_counts.get("by_program_city") or {}
+    apps_by_publisher_state = {
+        str(k).strip().upper(): v for k, v in (application_counts.get("by_publisher_state") or {}).items()
+    }
+    apps_by_publisher_city = {
+        str(k).strip().upper(): v for k, v in (application_counts.get("by_publisher_city") or {}).items()
+    }
+    apps_by_program_publisher_state = {
+        p: {str(k).strip().upper(): v for k, v in (pubs or {}).items()}
+        for p, pubs in (application_counts.get("by_program_publisher_state") or {}).items()
+    }
+    apps_by_program_publisher_city = {
+        p: {str(k).strip().upper(): v for k, v in (pubs or {}).items()}
+        for p, pubs in (application_counts.get("by_program_publisher_city") or {}).items()
+    }
     _blank_app_counts = {"with_code": 0, "without_code": 0, "via_redirect": 0, "via_api": 0}
 
     df = read_data_sheet(lead_bytes)
@@ -468,12 +482,30 @@ def compute_report(
                            "applications": int(apps), "conversion_pct": None}
         return out
 
-    geo_by_state = {"All": make_geo_breakdown(work, "state", apps_by_state)}
-    geo_by_city = {"All": make_geo_breakdown(work, "city", apps_by_city)}
+    # Nested [program_or_All][publisher_or_All] -> {location: {...}} so the Geo tab
+    # can slice by Program, by Publisher, or by both at once (a publisher's reach
+    # within one program) without three separate parallel structures.
+    geo_by_state: Dict[str, Dict[str, Any]] = {}
+    geo_by_city: Dict[str, Dict[str, Any]] = {}
+
+    def add_geo(prog_key: str, pub_key: str, frame: pd.DataFrame,
+               state_counts: Dict[str, int], city_counts: Dict[str, int]) -> None:
+        geo_by_state.setdefault(prog_key, {})[pub_key] = make_geo_breakdown(frame, "state", state_counts)
+        geo_by_city.setdefault(prog_key, {})[pub_key] = make_geo_breakdown(frame, "city", city_counts)
+
+    add_geo("All", "All", work, apps_by_state, apps_by_city)
     for prog_name in programs:
         sub = work[work["prog"] == prog_name]
-        geo_by_state[prog_name] = make_geo_breakdown(sub, "state", apps_by_program_state.get(prog_name, {}))
-        geo_by_city[prog_name] = make_geo_breakdown(sub, "city", apps_by_program_city.get(prog_name, {}))
+        add_geo(prog_name, "All", sub, apps_by_program_state.get(prog_name, {}), apps_by_program_city.get(prog_name, {}))
+    for pub_name in pub_cats:
+        pub_key = pub_name.strip().upper()
+        pub_frame = work[work["pub"] == pub_name]
+        add_geo("All", pub_name, pub_frame, apps_by_publisher_state.get(pub_key, {}), apps_by_publisher_city.get(pub_key, {}))
+        for prog_name in programs:
+            sub = pub_frame[pub_frame["prog"] == prog_name]
+            add_geo(prog_name, pub_name, sub,
+                    apps_by_program_publisher_state.get(prog_name, {}).get(pub_key, {}),
+                    apps_by_program_publisher_city.get(prog_name, {}).get(pub_key, {}))
     result["geo_by_state"] = geo_by_state
     result["geo_by_city"] = geo_by_city
     result["data_quality"]["state_column_present"] = bool(col_state)
@@ -791,25 +823,37 @@ def aggregate_reports(reports, settings, start: Optional[str] = None, end: Optio
     if len(prog_reports) > 1:
         result["program_reports"] = prog_reports
 
-    # Geography: diff matching locations between the two snapshots (overall + per program).
+    # Geography: diff matching locations between the two snapshots, per program x
+    # publisher slice (both "All" for the plain per-program/per-publisher views,
+    # and paired for the "one publisher within one program" view).
+    def geo_diff_locations(e: Dict[str, Any], s: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        merged: Dict[str, Dict[str, Any]] = {}
+        for loc in set(e) | set(s):
+            ev, sv = e.get(loc, {}), s.get(loc, {})
+            leads = max(0, (ev.get("leads", 0) or 0) - (sv.get("leads", 0) or 0))
+            verified = max(0, (ev.get("verified_leads", 0) or 0) - (sv.get("verified_leads", 0) or 0))
+            relevant = max(0, (ev.get("relevant_leads", 0) or 0) - (sv.get("relevant_leads", 0) or 0))
+            apps = max(0, (ev.get("applications", 0) or 0) - (sv.get("applications", 0) or 0))
+            if leads or verified or relevant or apps:
+                merged[loc] = {"leads": leads, "verified_leads": verified, "relevant_leads": relevant,
+                              "applications": apps,
+                              "conversion_pct": round(apps / leads * 100, 2) if leads else None}
+        return merged
+
     def geo_diff(key: str) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
-        for prog_key in ["All"] + programs:
-            e = (end_res.get(key) or {}).get(prog_key) or {}
-            s = (start_res.get(key) or {}).get(prog_key) if start_res else {} or {}
-            merged: Dict[str, Dict[str, Any]] = {}
-            for loc in set(e) | set(s):
-                ev, sv = e.get(loc, {}), s.get(loc, {})
-                leads = max(0, (ev.get("leads", 0) or 0) - (sv.get("leads", 0) or 0))
-                verified = max(0, (ev.get("verified_leads", 0) or 0) - (sv.get("verified_leads", 0) or 0))
-                relevant = max(0, (ev.get("relevant_leads", 0) or 0) - (sv.get("relevant_leads", 0) or 0))
-                apps = max(0, (ev.get("applications", 0) or 0) - (sv.get("applications", 0) or 0))
-                if leads or verified or relevant or apps:
-                    merged[loc] = {"leads": leads, "verified_leads": verified, "relevant_leads": relevant,
-                                  "applications": apps,
-                                  "conversion_pct": round(apps / leads * 100, 2) if leads else None}
-            if merged:
-                out[prog_key] = merged
+        end_geo = end_res.get(key) or {}
+        start_geo = (start_res.get(key) or {}) if start_res else {}
+        for prog_key in set(end_geo) | set(start_geo):
+            e_pubs = end_geo.get(prog_key) or {}
+            s_pubs = start_geo.get(prog_key) or {}
+            pub_out: Dict[str, Any] = {}
+            for pub_key in set(e_pubs) | set(s_pubs):
+                merged = geo_diff_locations(e_pubs.get(pub_key) or {}, s_pubs.get(pub_key) or {})
+                if merged:
+                    pub_out[pub_key] = merged
+            if pub_out:
+                out[prog_key] = pub_out
         return out
 
     geo_state = geo_diff("geo_by_state")
