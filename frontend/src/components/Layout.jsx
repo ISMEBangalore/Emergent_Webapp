@@ -80,6 +80,9 @@ export const Layout = ({ children }) => {
             </button>
           </div>
         </div>
+        <div className="px-6 py-3 border-t border-slate-100">
+          <img src="/isme-logo.png" alt="ISME Bangalore" className="h-7 w-auto" />
+        </div>
       </aside>
 
       {/* Mobile top bar */}
@@ -105,6 +108,9 @@ export const Layout = ({ children }) => {
               <button onClick={handleLogout} className="flex items-center gap-1 text-xs text-slate-500 hover:text-[#002FA7]">
                 <SignOut size={15} weight="bold" /> Sign out
               </button>
+            </div>
+            <div className="pt-3">
+              <img src="/isme-logo.png" alt="ISME Bangalore" className="h-6 w-auto" />
             </div>
           </div>
         </div>
