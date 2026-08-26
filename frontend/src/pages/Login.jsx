@@ -36,12 +36,9 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center p-4 relative overflow-hidden">
-      <img
-        src="/isme-logo.png"
-        alt=""
-        aria-hidden="true"
-        className="hidden sm:block pointer-events-none select-none absolute -bottom-10 -right-16 w-[520px] max-w-none opacity-[0.08]"
-      />
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+        <img src="/isme-logo.png" alt="" aria-hidden="true" className="w-full max-w-none opacity-[0.08]" />
+      </div>
       <Card className="w-full max-w-sm border-slate-200 relative z-10">
         <CardHeader className="items-center text-center">
           <div className="h-12 w-12 rounded-md bg-[#002FA7] flex items-center justify-center mb-2">

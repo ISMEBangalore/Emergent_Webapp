@@ -81,7 +81,7 @@ export const Layout = ({ children }) => {
           </div>
         </div>
         <div className="px-6 py-3 border-t border-slate-100">
-          <img src="/isme-logo.png" alt="ISME Bangalore" className="h-7 w-auto" />
+          <img src="/isme-logo.png" alt="ISME Bangalore" className="w-full h-auto" />
         </div>
       </aside>
 
@@ -110,7 +110,7 @@ export const Layout = ({ children }) => {
               </button>
             </div>
             <div className="pt-3">
-              <img src="/isme-logo.png" alt="ISME Bangalore" className="h-6 w-auto" />
+              <img src="/isme-logo.png" alt="ISME Bangalore" className="w-full h-auto" />
             </div>
           </div>
         </div>
