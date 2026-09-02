@@ -24,6 +24,28 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      - key: RESEND_API_KEY
+        sync: false # from resend.com - proactive alert emails are skipped (logged only) if unset
+      - key: ALERT_EMAIL_FROM
+        sync: false # optional, e.g. "LeadPulse Alerts <alerts@yourdomain.com>" - defaults to Resend's sandbox sender
+      - key: CRON_SECRET
+        sync: false # shared secret for the isme-leadpulse-alert-check cron job below - must match its CRON_SECRET
+
+  # Weekly proactive-alert check - calls the API's cron-secret-protected
+  # endpoint so a scheduled trigger can send alert emails without a logged-in
+  # user's JWT. See README for setup (CRON_SECRET must match the api service's).
+  - type: cron
+    name: isme-leadpulse-alert-check
+    env: python
+    plan: free
+    schedule: "0 9 * * MON" # Monday 09:00 UTC - adjust to your admissions team's week
+    buildCommand: "true"
+    startCommand: curl -sf -X POST "$ALERT_API_URL/api/alerts/cron-check" -H "X-Cron-Secret: $CRON_SECRET"
+    envVars:
+      - key: ALERT_API_URL
+        sync: false # the isme-leadpulse-api service's URL, e.g. https://isme-leadpulse-api.onrender.com
+      - key: CRON_SECRET
+        sync: false # must match CRON_SECRET set on isme-leadpulse-api above
 
   # React frontend, built as a static site
   - type: web

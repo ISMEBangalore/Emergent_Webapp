@@ -7,12 +7,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { FloppyDisk, Info } from "@phosphor-icons/react";
+import { FloppyDisk, Info, BellRinging, PaperPlaneTilt } from "@phosphor-icons/react";
 
 export default function Settings() {
   const [s, setS] = useState(null);
   const [saving, setSaving] = useState(false);
   const [avail, setAvail] = useState({ courses: [], publishers: [] });
+  const [sendingTest, setSendingTest] = useState(false);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -38,11 +39,32 @@ export default function Settings() {
         included_publishers: s.included_publishers,
         excluded_publishers: s.excluded_publishers,
         applications_payment_approved_only: s.applications_payment_approved_only,
+        alert_email_enabled: s.alert_email_enabled,
+        alert_email_to: s.alert_email_to,
       };
       await api.updateSettings(payload);
       toast.success("Settings saved — regenerate a report to apply");
     } catch { toast.error("Save failed"); }
     setSaving(false);
+  };
+
+  const sendTestAlert = async () => {
+    setSendingTest(true);
+    try {
+      const res = await api.checkAlerts(true);
+      if (res.sent) {
+        toast.success(`Sent — ${res.alerts.length} alert${res.alerts.length === 1 ? "" : "s"} emailed to ${s.alert_email_to}.`);
+      } else if (res.reason === "no_alerts") {
+        toast.info("Nothing to send — no alerts are currently flagged.");
+      } else if (res.reason === "not_configured") {
+        toast.error("Save an enabled alert email address first.");
+      } else {
+        toast.error("Could not send — check RESEND_API_KEY is set on the server.");
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not send the test alert.");
+    }
+    setSendingTest(false);
   };
 
   const toggleCourse = (name) => {
@@ -191,6 +213,44 @@ export default function Settings() {
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${(s.applications_payment_approved_only ?? true) ? "left-[22px]" : "left-0.5"}`} />
             </button>
           </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BellRinging size={16} weight="bold" color="#002FA7" />
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Proactive alert emails</Label>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Email the current Application Insight alerts to someone automatically, instead of relying on
+                  someone opening the app to notice them.
+                </p>
+              </div>
+            </div>
+            <button type="button" data-testid="setting-alert-enabled"
+                    onClick={() => setS({ ...s, alert_email_enabled: !s.alert_email_enabled })}
+                    className={`relative h-6 w-11 rounded-full shrink-0 ml-3 transition-colors ${s.alert_email_enabled ? "bg-[#002FA7]" : "bg-slate-300"}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${s.alert_email_enabled ? "left-[22px]" : "left-0.5"}`} />
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <Label className="text-xs uppercase tracking-wide text-slate-500">Recipient email</Label>
+              <Input data-testid="setting-alert-email" type="email" value={s.alert_email_to || ""}
+                     onChange={(e) => setS({ ...s, alert_email_to: e.target.value })}
+                     className="mt-1" placeholder="ops@isme.in" />
+            </div>
+            <Button
+              type="button" variant="outline" size="sm" data-testid="send-test-alert-btn"
+              onClick={sendTestAlert} disabled={sendingTest || !s.alert_email_to} className="gap-1.5"
+            >
+              <PaperPlaneTilt size={14} weight="bold" /> {sendingTest ? "Sending…" : "Send test now"}
+            </Button>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            "Send test now" always sends if configured, even if the same alerts were already emailed. The scheduled
+            check only re-sends when the alert set actually changes.
+          </p>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">

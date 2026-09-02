@@ -47,6 +47,7 @@ export const api = {
   getSettings: () => client.get("/settings").then((r) => r.data),
   updateSettings: (body) => client.put("/settings", body).then((r) => r.data),
   getAvailable: () => client.get("/available").then((r) => r.data),
+  checkAlerts: (force = false) => client.post("/alerts/check", null, { params: { force } }).then((r) => r.data),
   listReports: () => client.get("/reports").then((r) => r.data),
   getReport: (id) => client.get(`/reports/${id}`).then((r) => r.data),
   deleteReport: (id) => client.delete(`/reports/${id}`).then((r) => r.data),
@@ -80,4 +81,5 @@ export const api = {
   getSeasonReport: (id) => client.get(`/seasons/${id}/report`).then((r) => r.data),
   freezeSeason: (id) => client.post(`/seasons/${id}/freeze`).then((r) => r.data),
   unfreezeSeason: (id) => client.post(`/seasons/${id}/unfreeze`).then((r) => r.data),
+  updateSeasonTargets: (id, targets) => client.put(`/seasons/${id}/targets`, { targets }).then((r) => r.data),
 };

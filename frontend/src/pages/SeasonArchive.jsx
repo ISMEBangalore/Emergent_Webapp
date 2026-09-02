@@ -9,6 +9,7 @@ import { fmtInt } from "@/lib/format";
 import { Chips, CompareFunnelTable, FunnelTable, mergeAllPrograms, seasonRangeLabel, seasonShortLabel } from "@/components/VerifiedLeadFunnelTable";
 import { ReportTabs } from "@/components/ReportTabs";
 import { KpiCards } from "@/components/KpiCards";
+import { SeasonTargets } from "@/components/SeasonTargets";
 
 const StatusBadge = ({ frozen }) =>
   frozen ? (
@@ -120,6 +121,17 @@ export default function SeasonArchive() {
       selectSeason(selectedId);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Could not unfreeze this season.");
+    }
+  };
+
+  const saveTargets = async (targets) => {
+    if (!selectedId) return;
+    try {
+      const updated = await api.updateSeasonTargets(selectedId, targets);
+      setSelectedData((d) => (d ? { ...d, season: { ...d.season, targets: updated.targets } } : d));
+      toast.success("Targets saved.");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not save targets.");
     }
   };
 
@@ -266,6 +278,10 @@ export default function SeasonArchive() {
               <div className="h-72 bg-slate-100 rounded-md animate-pulse mb-6" />
             ) : selectedData ? (
               <div className="mb-8">
+                <SeasonTargets
+                  season={selectedSeason} programs={selectedData.programs || []}
+                  funnel={selectedData.funnel} onSave={saveTargets}
+                />
                 <div className="inline-flex rounded-md border border-slate-200 bg-white p-1 mb-4" data-testid="archive-viewmode-toggle">
                   <button
                     onClick={() => showViewMode("funnel")}

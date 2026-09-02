@@ -39,6 +39,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "excluded_publishers": [],
     "included_publishers": [],
     "applications_payment_approved_only": True,
+    "alert_email_enabled": False,
+    "alert_email_to": "",
 }
 
 PROGRAM_CANDIDATES = ["Course", "Programme", "Program", "Form Interested In"]

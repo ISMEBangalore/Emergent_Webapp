@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")  # must run before importing auth (reads env vars at import time)
 
-from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel
@@ -24,6 +25,7 @@ from apps_parser import parse_application_files
 from application_insights import _blank_bucket, evaluate_alerts, parse_insights, subtract_buckets, summarize_bucket
 from verified_lead_analysis import build_funnel, extract_applicant_records, match_joined_students
 from excel_export import build_workbook
+from notify import send_alert_email
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -33,6 +35,9 @@ fs_bucket = AsyncIOMotorGridFSBucket(db)
 app = FastAPI()
 auth_router = APIRouter(prefix="/api/auth")
 api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+# Not JWT-protected like api_router - meant for an external scheduler (Render/Railway
+# Cron) to call without a logged-in user's token, guarded by CRON_SECRET instead.
+cron_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crm_report")
@@ -213,6 +218,8 @@ class SettingsIn(BaseModel):
     excluded_publishers: Optional[List[str]] = None
     included_publishers: Optional[List[str]] = None
     applications_payment_approved_only: Optional[bool] = None
+    alert_email_enabled: Optional[bool] = None
+    alert_email_to: Optional[str] = None
 
 
 @api_router.get("/settings")
@@ -518,6 +525,58 @@ async def _build_insights(start: Optional[str] = None, end: Optional[str] = None
 @api_router.get("/insights")
 async def get_insights(start: Optional[str] = None, end: Optional[str] = None):
     return await _build_insights(start, end)
+
+
+async def _run_alert_check(force: bool = False) -> Dict[str, Any]:
+    """Computes the current cumulative-to-date alerts (the same numbers
+    Application Insight already shows as banners) and emails them if: delivery
+    is configured and enabled, there's at least one alert, and the alert set
+    actually changed since the last send (unless `force`, used by the Settings
+    page's "send test" button) - so a standing critical condition doesn't
+    re-email every time a scheduled check fires."""
+    settings = await get_settings()
+    data = await _build_insights(None, None)
+    alerts = data.get("alerts") or []
+    to_email = (settings.get("alert_email_to") or "").strip()
+    enabled = bool(settings.get("alert_email_enabled"))
+
+    if not alerts or not enabled or not to_email:
+        return {"alerts": alerts, "sent": False, "reason": "no_alerts" if not alerts else "not_configured"}
+
+    signature = hashlib.sha256(
+        json.dumps(sorted((a.get("title", ""), a.get("severity", "")) for a in alerts)).encode()
+    ).hexdigest()
+    state = await db.alert_state.find_one({"_id": "global"})
+    if not force and state and state.get("last_signature") == signature:
+        return {"alerts": alerts, "sent": False, "reason": "unchanged"}
+
+    sent = send_alert_email(alerts, to_email)
+    if sent:
+        await db.alert_state.update_one(
+            {"_id": "global"},
+            {"$set": {"last_signature": signature, "last_sent_at": now_iso()}},
+            upsert=True,
+        )
+    return {"alerts": alerts, "sent": sent}
+
+
+@api_router.post("/alerts/check")
+async def check_alerts(force: bool = False):
+    """Manual trigger for the Settings page's "Send test now" button - runs
+    under normal JWT auth; `force=true` bypasses the unchanged-since-last-send
+    dedup so a test send always actually sends when configured."""
+    return await _run_alert_check(force=force)
+
+
+@cron_router.post("/alerts/cron-check")
+async def cron_check_alerts(x_cron_secret: Optional[str] = Header(None)):
+    """Called by an external scheduler on a timer, not a logged-in user - checks
+    a shared secret instead of a JWT. Refuses to run at all if CRON_SECRET isn't
+    set, rather than silently accepting any caller with no secret configured."""
+    expected = os.environ.get("CRON_SECRET")
+    if not expected or x_cron_secret != expected:
+        raise HTTPException(403, "Invalid or missing cron secret.")
+    return await _run_alert_check(force=False)
 
 
 def _build_ai_prompt(data: Dict[str, Any]) -> str:
@@ -860,12 +919,29 @@ async def create_season(payload: SeasonIn):
     doc = {
         "id": str(uuid.uuid4()), "label": label,
         "start": _validate_date(payload.start, "start"), "end": _validate_date(payload.end, "end"),
-        "created_at": now_iso(),
+        "created_at": now_iso(), "targets": {},
         "frozen": False, "frozen_data": None, "frozen_report": None, "frozen_at": None,
     }
     await db.seasons.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+class SeasonTargetsIn(BaseModel):
+    targets: Dict[str, int]
+
+
+@api_router.put("/seasons/{season_id}/targets")
+async def update_season_targets(season_id: str, payload: SeasonTargetsIn):
+    """Per-program admission-fee-paid targets for this season, set independently of
+    creation since the person setting a goal is often not deciding it the same
+    moment they name the season. Negative targets make no sense as a goal."""
+    targets = {p: max(0, int(v)) for p, v in payload.targets.items()}
+    res = await db.seasons.update_one({"id": season_id}, {"$set": {"targets": targets}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Season not found")
+    season = await db.seasons.find_one({"id": season_id}, {"_id": 0, "frozen_data": 0, "frozen_report": 0})
+    return season
 
 
 @api_router.delete("/seasons/{season_id}")
@@ -949,6 +1025,7 @@ async def unfreeze_season(season_id: str):
 
 app.include_router(auth_router)
 app.include_router(api_router)
+app.include_router(cron_router)
 
 _cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 if not _cors_origins:

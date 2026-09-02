@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReportTable } from "@/components/ReportTable";
 import { GeoReportPanel } from "@/components/GeoReportPanel";
+import { DataQualityPanel } from "@/components/DataQualityPanel";
 
 const Chips = ({ options, value, onChange, testidPrefix, labelFor }) => (
   <div className="flex flex-wrap items-center gap-2 mb-3" data-testid={`${testidPrefix}-filter`}>
@@ -52,6 +53,9 @@ export const ReportTabs = ({ result, publisherPanel = null }) => {
         {result.geo_by_state && (
           <TabsTrigger value="geography" data-testid="tab-geography">Geography</TabsTrigger>
         )}
+        {result.data_quality && (
+          <TabsTrigger value="data-quality" data-testid="tab-data-quality">Data Quality</TabsTrigger>
+        )}
       </TabsList>
 
       <TabsContent value="program" className="mt-4">
@@ -88,6 +92,12 @@ export const ReportTabs = ({ result, publisherPanel = null }) => {
       {result.geo_by_state && (
         <TabsContent value="geography" className="mt-4">
           <GeoReportPanel result={result} />
+        </TabsContent>
+      )}
+
+      {result.data_quality && (
+        <TabsContent value="data-quality" className="mt-4">
+          <DataQualityPanel result={result} />
         </TabsContent>
       )}
     </Tabs>
