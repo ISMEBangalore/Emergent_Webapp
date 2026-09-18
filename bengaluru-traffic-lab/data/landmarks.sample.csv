@@ -1,10 +1,23 @@
-# SAMPLE DATA — illustrative only. Coordinates are approximate and the
-# nearby_road_names lists are placeholders; verify both against a map
-# before using this for anything operational. Multiple pipe-separated
-# roads are supported in nearby_road_names.
+# SAMPLE DATA — illustrative only. Coordinates are approximate (city-wide
+# spread compiled from general knowledge of well-known Bengaluru localities,
+# not surveyed) and the nearby_road_names lists are placeholders; verify
+# both against a map before using this for anything operational. Multiple
+# pipe-separated roads are supported in nearby_road_names.
 name,kind,lat,lon,radius_m,nearby_road_names
 Bull Temple (Basavanagudi),temple_generic,12.9432,77.5721,400,Bugle Rock Road|Bull Temple Road
 Jumma Masjid (Bangalore City),masjid,12.9634,77.5793,400,Old Poor House Road|Avenue Road
 Someshwara Temple (Ulsoor),shani_temple,12.9815,77.6202,300,Someshwara Temple Street
 St. Mary's Basilica,church,12.9634,77.6089,400,Court Street
 Sri Prasanna Anjaneya Temple (illustrative),hanuman_temple,12.9550,77.5850,300,Anjaneya Temple Road
+ISKCON Temple (Rajajinagar),temple_generic,12.9990,77.5510,450,Chord Road
+Kaadu Malleshwara Temple,shani_temple,13.0035,77.5709,300,Sampige Road
+Gavipuram Gangadhareshwara area temple (illustrative),temple_generic,12.9390,77.5680,350,Kanakapura Road
+Masjid-e-Jamia Shivajinagar (illustrative),masjid,12.9860,77.6040,400,Queens Road
+Blessed Sacrament / Frazer Town area church (illustrative),church,12.9946,77.6115,350,Coles Road
+Banashankari Amma Temple,temple_generic,12.9255,77.5468,400,Kanakapura Road
+Jayanagar hanuman temple (illustrative),hanuman_temple,12.9250,77.5938,300,Jayanagar 4th Block
+Yelahanka shani temple (illustrative),shani_temple,13.1007,77.5963,300,Yelahanka Main Road
+Whitefield temple (illustrative),temple_generic,12.9698,77.7500,400,Whitefield Main Road
+Electronic City masjid (illustrative),masjid,12.8452,77.6602,350,Hosur Road
+HSR Layout hanuman temple (illustrative),hanuman_temple,12.9116,77.6389,300,27th Main Road
+Vijayanagar masjid (illustrative),masjid,12.9707,77.5350,350,Vijayanagar Main Road
