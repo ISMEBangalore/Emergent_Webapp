@@ -12,8 +12,15 @@ volume, i.e. total vehicle-hours across the loaded skeleton) as a proxy
 for "does this help overall or just move the jam" — it does NOT run a
 real traffic assignment/equilibrium (drivers re-choosing routes
 network-wide), only whatever explicit reroute the caller applies via
-``RoadChange.reroute_to``. Treat results as directional and educational,
-not as a validated volume forecast.
+``RoadChange.reroute_fraction``. Treat results as directional and
+educational, not as a validated volume forecast.
+
+By default (``use_pcu=True``), every edge's volume/capacity ratio (and
+therefore its travel time and Level of Service) is computed in Passenger
+Car Unit terms via ``bpr.DEFAULT_VEHICLE_MIX``, not raw vehicle counts —
+see bpr.py's module docstring for why that correction matters for
+Indian mixed traffic. Pass ``use_pcu=False`` to reproduce the previous,
+uncorrected behavior for comparison.
 """
 from __future__ import annotations
 
@@ -21,7 +28,7 @@ from dataclasses import dataclass
 
 import networkx as nx
 
-from .bpr import evaluate_segment
+from .bpr import DEFAULT_VEHICLE_MIX, evaluate_segment
 from .road_network import EDGES, NODES, RoadEdge, edge_by_id
 
 PAVEMENT_SPEED_MULTIPLIER = {
@@ -38,6 +45,7 @@ class RoadChange:
     lanes: int | None = None  # widen/narrow; None = unchanged
     pavement: str | None = None  # key into PAVEMENT_SPEED_MULTIPLIER; None = unchanged ("good")
     reroute_fraction: float = 0.0  # 0..1 of this edge's volume diverted away (festival rerouting)
+    vehicle_mix: dict[str, float] | None = None  # per-edge PCU composition override; None = use the simulation default
 
 
 @dataclass(frozen=True)
@@ -49,7 +57,21 @@ class EdgeState:
     result: object  # bpr.SegmentResult
 
 
-def _apply_changes(edges: list[RoadEdge], changes: list[RoadChange]) -> dict[str, EdgeState]:
+def _apply_changes(
+    edges: list[RoadEdge],
+    changes: list[RoadChange],
+    use_pcu: bool = True,
+    default_vehicle_mix: dict[str, float] | None = DEFAULT_VEHICLE_MIX,
+) -> dict[str, EdgeState]:
+    """``use_pcu`` (default True) converts every edge's raw vehicle-count
+    volume to a Passenger Car Unit (PCU) equivalent before computing
+    volume/capacity — see bpr.py's module docstring for why that matters
+    for Indian mixed traffic. Pass ``use_pcu=False`` to see the previous,
+    uncorrected-vehicle-count behavior (useful for a side-by-side
+    classroom comparison of "with vs without the PCU correction").
+    A per-edge ``RoadChange.vehicle_mix`` overrides ``default_vehicle_mix``
+    for that edge specifically, whenever PCU is in effect.
+    """
     changes_by_edge = {c.edge_id: c for c in changes}
     # First pass: compute each edge's own lane/pavement overrides and how
     # much volume it sheds via reroute_fraction.
@@ -75,7 +97,10 @@ def _apply_changes(edges: list[RoadEdge], changes: list[RoadChange]) -> dict[str
         multiplier = PAVEMENT_SPEED_MULTIPLIER[pavement_key]
         free_flow_kmh = edge.free_flow_kmh * multiplier
         volume_vph = volume_by_edge[edge.id]
-        result = evaluate_segment(edge.length_m, free_flow_kmh, lanes, volume_vph)
+        vehicle_mix = None
+        if use_pcu:
+            vehicle_mix = (change.vehicle_mix if change and change.vehicle_mix else default_vehicle_mix)
+        result = evaluate_segment(edge.length_m, free_flow_kmh, lanes, volume_vph, vehicle_mix=vehicle_mix)
         states[edge.id] = EdgeState(edge, lanes, free_flow_kmh, volume_vph, result)
     return states
 
@@ -129,9 +154,15 @@ class SimulationComparison:
     network_travel_time_pct_change: float
 
 
-def simulate(source: str, target: str, changes: list[RoadChange]) -> SimulationComparison:
-    before_states = _apply_changes(EDGES, [])
-    after_states = _apply_changes(EDGES, changes)
+def simulate(
+    source: str,
+    target: str,
+    changes: list[RoadChange],
+    use_pcu: bool = True,
+    default_vehicle_mix: dict[str, float] | None = DEFAULT_VEHICLE_MIX,
+) -> SimulationComparison:
+    before_states = _apply_changes(EDGES, [], use_pcu=use_pcu, default_vehicle_mix=default_vehicle_mix)
+    after_states = _apply_changes(EDGES, changes, use_pcu=use_pcu, default_vehicle_mix=default_vehicle_mix)
 
     before = shortest_route(before_states, source, target)
     after = shortest_route(after_states, source, target)

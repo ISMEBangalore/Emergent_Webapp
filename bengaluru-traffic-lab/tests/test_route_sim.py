@@ -79,3 +79,43 @@ def test_total_network_travel_time_is_positive_and_finite():
     total = total_network_travel_time_veh_hours(states)
     assert total > 0
     assert total < 1_000_000  # sanity bound, not a precise assertion
+
+
+def test_apply_changes_defaults_to_pcu_adjusted_volume():
+    states = _base_states()  # _apply_changes(EDGES, []) — use_pcu defaults to True
+    edge = EDGES[0]
+    state = states[edge.id]
+    # DEFAULT_VEHICLE_MIX is two-wheeler-heavy, so PCU-adjusted volume
+    # should differ from (and, for this mix, be lower than) the raw count.
+    assert state.result.volume_effective != pytest.approx(edge.base_volume_vph)
+    assert state.result.los  # a real LOS grade was computed
+
+
+def test_apply_changes_use_pcu_false_reproduces_raw_volume_behavior():
+    from traffic_lab.route_sim import _apply_changes
+
+    states = _apply_changes(EDGES, [], use_pcu=False)
+    edge = EDGES[0]
+    assert states[edge.id].result.volume_effective == pytest.approx(edge.base_volume_vph)
+
+
+def test_simulate_use_pcu_false_matches_manual_raw_volume_evaluation():
+    from traffic_lab.bpr import evaluate_segment
+    from traffic_lab.route_sim import _apply_changes
+
+    states = _apply_changes(EDGES, [], use_pcu=False)
+    edge = EDGES[0]
+    manual = evaluate_segment(edge.length_m, edge.free_flow_kmh, edge.lanes, edge.base_volume_vph)
+    assert states[edge.id].result.travel_time_s == pytest.approx(manual.travel_time_s)
+
+
+def test_road_change_can_override_vehicle_mix_per_edge():
+    from traffic_lab.route_sim import _apply_changes
+
+    edge = EDGES[0]
+    bus_heavy_mix = {"two_wheeler": 0.0, "auto_rickshaw": 0.0, "car": 0.2, "bus_truck": 0.8}
+    default_states = _apply_changes(EDGES, [])
+    overridden_states = _apply_changes(EDGES, [RoadChange(edge_id=edge.id, vehicle_mix=bus_heavy_mix)])
+    # A bus-heavy mix uses more effective capacity (PCU factor 3.0) than
+    # the default two-wheeler-heavy mix, so the v/c ratio should rise.
+    assert overridden_states[edge.id].result.volume_capacity_ratio > default_states[edge.id].result.volume_capacity_ratio

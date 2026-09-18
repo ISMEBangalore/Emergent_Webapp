@@ -180,18 +180,24 @@ findings below, ranked by how much they'd matter to someone actually relying on 
 (most cited/discussed in the Report ▸ Recommendations and 3D simulator pages
 themselves, which is where a reader would run into them):
 
-1. **No Passenger Car Unit (PCU) conversion.** `bpr.py`/`road_network.py` use plain
-   vehicle counts and a flat 1800 vph/lane capacity — a US Highway Capacity Manual
-   assumption for homogeneous, lane-disciplined traffic. Indian practice (IRC:106)
-   converts every vehicle type to a PCU equivalent (two-wheeler ≈0.5, auto-rickshaw
-   ≈0.8, bus/truck ≈3.0) before computing capacity, precisely because Indian traffic
-   is heterogeneous and doesn't hold lane discipline. This is the single most
-   consequential gap for an Indian city specifically — documented as a known
-   limitation in both modules' docstrings; a full fix means re-deriving every
-   corridor's volume/capacity in PCU/hour, not just relabeling units.
-2. **No Level of Service (LOS) framing.** The standard LOS A-F vocabulary a
-   transportation course teaches isn't connected to this tool's own
-   none/elevated/high/extreme severity scale anywhere.
+1. **~~No Passenger Car Unit (PCU) conversion.~~ FIXED.** `bpr.py` now implements
+   `pcu_volume()`/`PCU_FACTORS`/`DEFAULT_VEHICLE_MIX` (two-wheeler 0.5, auto-rickshaw
+   0.8, car 1.0, bus/truck 3.0 — IRC:106-style), and `route_sim.simulate()`/
+   `_apply_changes()` apply it by default (`use_pcu=True`) — every volume/capacity
+   ratio the 3D simulator computes is now PCU-adjusted, not a raw vehicle count, with
+   a per-edge `RoadChange.vehicle_mix` override and a UI toggle
+   ("Use PCU-adjusted capacity") to compare with/without. What's still NOT fixed:
+   `DEFAULT_LANE_CAPACITY_VPH = 1800` (PCU/hour/lane once PCU is on) is still a round
+   number carried over from non-Indian literature, not looked up from IRC:106's own
+   capacity tables (which vary by carriageway width and divided/undivided status),
+   and `DEFAULT_VEHICLE_MIX` is an illustrative typical composition, not a
+   Bengaluru-specific classified count. Residual work: replace both with real
+   IRC-sourced values before relying on absolute (not just relative/directional)
+   numbers from this tool.
+2. **~~No Level of Service (LOS) framing.~~ FIXED.** `bpr.level_of_service()` grades
+   every segment A-F from its (now PCU-adjusted) v/c ratio, surfaced throughout the
+   3D simulator's route summary, edge cards, and bottleneck recommendation — the
+   same thresholds tabulated in `docs/traffic-management-education.html` §3.
 3. **No real traffic assignment/equilibrium.** The 3D simulator (`docs/city-3d.html`)
    recomputes travel time on a fixed shortest path only — it doesn't model drivers
    re-choosing routes network-wide the way Wardrop's principle describes. Honest as
@@ -208,9 +214,12 @@ themselves, which is where a reader would run into them):
    `docs/traffic-management-education.html` (added alongside this audit) is a first
    pass at addressing this, alongside global case studies and a classroom-use guide.
 
-**Classroom-utility verdict:** suitable as an **introductory, exploratory** teaching
-aid for building intuition about multi-causal congestion and planning trade-offs
-(e.g. a first-year urban-studies or civic-tech elective) — not yet sufficient as the
-primary tool in a rigorous transportation-engineering course without a professor
-supplementing the PCU/LOS gap above. Items 1-2 and 6 are the highest-value, most
-tractable next steps; items 3-5 are legitimate future modules, not quick fixes.
+**Classroom-utility verdict, updated:** with items 1, 2, and 6 addressed (PCU
+conversion, LOS grading, and the glossary/case-study article), this is now closer to
+a **usable-with-supplementation** tool for an introductory transportation-planning
+course, not just an exploratory civic-tech one — a professor would still want to
+supplement items 3-5 (real traffic assignment, transit/NMT modes, intersection-level
+modeling) explicitly, and should re-derive `DEFAULT_LANE_CAPACITY_VPH` and
+`DEFAULT_VEHICLE_MIX` from real IRC tables/local counts before treating any absolute
+number as more than directional. Items 3-5 remain legitimate future modules, not
+quick fixes.

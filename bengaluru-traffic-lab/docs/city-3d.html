@@ -160,6 +160,22 @@
       <div id="routeSummary" class="route-summary" style="margin-top:12px;"></div>
     </div>
 
+    <div class="card">
+      <h2>Traffic composition model</h2>
+      <p class="note">
+        Indian traffic is a heterogeneous mix (two-wheelers, autos, cars, buses/trucks) that doesn't hold lane
+        discipline — the standard US-style "vehicles/hour" capacity assumption overstates real road use for that
+        mix. With this on, every volume/capacity ratio below is computed in <strong>Passenger Car Units (PCU)</strong>
+        using an illustrative mix (45% two-wheelers, 15% autos, 30% cars, 10% bus/truck — see the
+        <a href="./traffic-management-education.html#frameworks" target="_blank" rel="noopener">PCU table</a>
+        for the conversion factors). Toggle it off to see the previous, uncorrected estimate.
+      </p>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+        <input type="checkbox" id="usePcuToggle" checked style="width:auto; margin:0;">
+        <span style="font-size:12.5px; color:var(--ink);">Use PCU-adjusted capacity (recommended)</span>
+      </label>
+    </div>
+
     <div class="card" id="improveCard" hidden>
       <h2>Road improvements along this route</h2>
       <p class="note">Each card below is one corridor on the route just computed. Widen it (more lanes), resurface it (better materials/potholes fixed → higher free-flow speed), or — where a real parallel corridor exists in this skeleton — reroute a share of its traffic during a festival/closure.</p>
@@ -204,10 +220,31 @@
   const EDGE_BY_ID = Object.fromEntries(NETWORK.edges.map((e) => [e.id, e]));
 
   // ---------- JS port of traffic_lab.bpr + traffic_lab.route_sim ----------
-  const LANE_CAPACITY_VPH = 1800;
+  const LANE_CAPACITY_VPH = 1800; // PCU/hour/lane when PCU is on, else plain vehicles/hour/lane
   const BPR_ALPHA = 0.15;
   const BPR_BETA = 4.0;
   const PAVEMENT_SPEED_MULTIPLIER = { poor: 0.7, fair: 0.85, good: 1.0, excellent: 1.15 };
+
+  // Passenger Car Unit factors (IRC:106-style) and an illustrative
+  // "typical" Indian mixed-urban-traffic composition — see bpr.py's
+  // module docstring for why raw vehicle counts overstate a mixed
+  // traffic stream's real road-space use. Mirrors bpr.PCU_FACTORS /
+  // bpr.DEFAULT_VEHICLE_MIX exactly; keep both in sync by hand.
+  const PCU_FACTORS = { two_wheeler: 0.5, auto_rickshaw: 0.8, car: 1.0, bus_truck: 3.0 };
+  const DEFAULT_VEHICLE_MIX = { two_wheeler: 0.45, auto_rickshaw: 0.15, car: 0.30, bus_truck: 0.10 };
+  let usePcu = true; // toggled by the "Use PCU-adjusted capacity" checkbox
+
+  function pcuVolume(totalVph, mix) {
+    mix = mix || DEFAULT_VEHICLE_MIX;
+    return totalVph * Object.keys(mix).reduce((sum, kind) => sum + mix[kind] * PCU_FACTORS[kind], 0);
+  }
+  // Typical Highway Capacity Manual-style LOS break points on v/c ratio —
+  // mirrors bpr.LOS_THRESHOLDS exactly.
+  const LOS_THRESHOLDS = [[0.35, "A"], [0.55, "B"], [0.75, "C"], [0.90, "D"], [1.00, "E"]];
+  function levelOfService(vc) {
+    for (const [threshold, grade] of LOS_THRESHOLDS) { if (vc < threshold) return grade; }
+    return "F";
+  }
 
   function freeFlowTimeS(lengthM, freeFlowKmh) {
     const freeFlowMps = (freeFlowKmh * 1000) / 3600;
@@ -222,7 +259,7 @@
     return volumeVph / (lanes * LANE_CAPACITY_VPH);
   }
 
-  // changes: Map<edgeId, { lanes?, pavement?, rerouteFraction? }>
+  // changes: Map<edgeId, { lanes?, pavement?, rerouteFraction?, vehicleMix? }>
   function applyChanges(changes) {
     const volumeByEdge = {};
     NETWORK.edges.forEach((e) => { volumeByEdge[e.id] = e.base_volume_vph; });
@@ -245,12 +282,14 @@
       const lanes = change.lanes || edge.lanes;
       const pavementKey = change.pavement || "good";
       const freeFlowKmh = edge.free_flow_kmh * PAVEMENT_SPEED_MULTIPLIER[pavementKey];
-      const volumeVph = volumeByEdge[edge.id];
+      const rawVolumeVph = volumeByEdge[edge.id];
+      const volumeVph = usePcu ? pcuVolume(rawVolumeVph, change.vehicleMix) : rawVolumeVph;
       const travelTimeS = bprTravelTimeS(edge.length_m, freeFlowKmh, lanes, volumeVph);
+      const vc = vcRatio(volumeVph, lanes);
       states[edge.id] = {
-        edge, lanes, freeFlowKmh, volumeVph, travelTimeS,
+        edge, lanes, freeFlowKmh, rawVolumeVph, volumeVph, travelTimeS,
         freeFlowTimeS: freeFlowTimeS(edge.length_m, freeFlowKmh),
-        vc: vcRatio(volumeVph, lanes)
+        vc, los: levelOfService(vc)
       };
     });
     return states;
@@ -371,17 +410,21 @@
       `<div>${formatKm(route.totalLengthM)} · ${route.pathEdges.length} corridor${route.pathEdges.length === 1 ? "" : "s"}</div>` +
       `<ul class="route-steps">${route.pathEdges.map((eid) => {
         const s = states[eid];
-        return `<li>${s.edge.name} <span style="color:${vcColor(s.vc)};font-weight:700;">(${vcLabel(s.vc)})</span></li>`;
+        return `<li>${s.edge.name} <span style="color:${vcColor(s.vc)};font-weight:700;">(${vcLabel(s.vc)} · LOS ${s.los})</span></li>`;
       }).join("")}</ul>`;
   }
 
-  function edgeControlRowHtml(edgeId, current) {
+  function edgeControlRowHtml(edgeId, current, state) {
     const edge = EDGE_BY_ID[edgeId];
     const hasAlt = edge.reroute_alternates.length > 0;
+    const pcuNote = usePcu
+      ? `${Math.round(state.rawVolumeVph)} vehicles/hr → ${Math.round(state.volumeVph)} PCU/hr`
+      : `${Math.round(state.rawVolumeVph)} vehicles/hr (PCU adjustment off)`;
     return `
       <div class="edge-card" data-edge-id="${edgeId}">
         <div class="edge-name">${edge.name}</div>
         <div class="edge-meta">${formatKm(edge.length_m)} · baseline ${edge.lanes} lanes @ ${edge.free_flow_kmh} km/h</div>
+        <div class="edge-meta">${pcuNote} · v/c ${state.vc.toFixed(2)} · <span style="color:${vcColor(state.vc)};font-weight:700;">LOS ${state.los}</span></div>
         <label>Lanes (currently ${current.lanes})</label>
         <input type="range" class="laneInput" min="${Math.max(2, edge.lanes - 2)}" max="${edge.lanes + 6}" step="1" value="${current.lanes}">
         <label>Pavement / materials</label>
@@ -398,7 +441,7 @@
   function renderEdgeCards(route, states) {
     if (!route) return;
     const wrap = document.getElementById("edgeCards");
-    wrap.innerHTML = route.pathEdges.map((eid) => edgeControlRowHtml(eid, { lanes: EDGE_BY_ID[eid].lanes, pavement: "good", rerouteFraction: 0 })).join("");
+    wrap.innerHTML = route.pathEdges.map((eid) => edgeControlRowHtml(eid, { lanes: EDGE_BY_ID[eid].lanes, pavement: "good", rerouteFraction: 0 }, states[eid])).join("");
     document.getElementById("improveCard").hidden = false;
 
     wrap.querySelectorAll(".edge-card").forEach((card) => {
@@ -470,7 +513,7 @@
       : pct > 0.5
         ? `This route is predicted ${pct.toFixed(1)}% slower with these changes — rerouting volume onto an alternate can overload it instead (check the alternate's v/c ratio below).`
         : `These changes make little predicted difference to this specific route (${pct.toFixed(1)}%).`);
-    bullets.push(`The remaining bottleneck on the route is <strong>${bottleneck.edge.name}</strong> at a ${bottleneck.vc.toFixed(2)} volume/capacity ratio (${vcLabel(bottleneck.vc)}) — further improvement here would help more than elsewhere on this path.`);
+    bullets.push(`The remaining bottleneck on the route is <strong>${bottleneck.edge.name}</strong> at a ${bottleneck.vc.toFixed(2)} volume/capacity ratio (${vcLabel(bottleneck.vc)}, LOS ${bottleneck.los}) — further improvement here would help more than elsewhere on this path.`);
     bullets.push(netPct < -0.05
       ? `Network-wide predicted total travel time also drops ${Math.abs(netPct).toFixed(2)}% — this change looks like a net win, not just a local one.`
       : netPct > 0.05
@@ -496,6 +539,10 @@
   document.getElementById("recenterBtn").addEventListener("click", () => fitCameraToRoute(currentRoute));
   fromSelect.addEventListener("change", computeAndRenderRoute);
   toSelect.addEventListener("change", computeAndRenderRoute);
+  document.getElementById("usePcuToggle").addEventListener("change", (e) => {
+    usePcu = e.target.checked;
+    computeAndRenderRoute(); // PCU on/off changes every edge's volume basis — treat as a fresh scenario
+  });
 
   // ---------- 3D map ----------
   let Map3DElementCtor, Marker3DElementCtor, Polyline3DElementCtor;

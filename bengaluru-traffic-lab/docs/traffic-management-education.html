@@ -269,7 +269,7 @@
   <p class="section-sub">The vocabulary this tool's own severity scale and BPR model connect to, but never explains on their own.</p>
 
   <h3 style="font-size:15px;">Level of Service (LOS)</h3>
-  <p>The standard way US/India transportation engineering describes how well a road is operating, graded A (free flow) to F (breakdown/gridlock), usually tied to volume/capacity (v/c) ratio.</p>
+  <p>The standard way US/India transportation engineering describes how well a road is operating, graded A (free flow) to F (breakdown/gridlock), usually tied to volume/capacity (v/c) ratio. The <a href="./city-3d.html">3D route simulator</a> now computes this grade live for every corridor (via <code>bpr.level_of_service()</code>), using the same thresholds below.</p>
   <table class="data-table">
     <thead><tr><th>LOS</th><th>Typical v/c ratio</th><th>Driving experience</th><th>Roughly maps to this tool's scale</th></tr></thead>
     <tbody>
@@ -299,11 +299,14 @@
       <tr><td>Bus / truck</td><td class="num">~3.0</td></tr>
     </tbody>
   </table>
-  <div class="warn-card">
-    <strong>This project doesn't do this yet.</strong> <code>bpr.py</code> and <code>road_network.py</code> use
-    plain vehicle counts. A corridor's real capacity and effective volume in Bengaluru's actual mixed traffic
-    would need every count above converted to PCU/hour first — see §5 below and the code's own docstrings for
-    where this is flagged as a known limitation, not silently assumed away.
+  <div class="info-card">
+    <strong>Now implemented in the 3D simulator.</strong> <code>bpr.py</code>'s <code>pcu_volume()</code> applies
+    exactly this conversion, and the <a href="./city-3d.html">3D route simulator</a> uses it by default for every
+    volume/capacity ratio it computes — look for the "Traffic composition model" toggle in its sidebar, and each
+    corridor's edge card shows both the raw vehicle count and its PCU-adjusted equivalent side by side. What's
+    still <strong>not</strong> fixed: the 1800/hour/lane capacity figure and the illustrative vehicle mix (45%
+    two-wheelers, 15% autos, 30% cars, 10% bus/truck) are both still round, typical numbers, not looked up from
+    IRC:106's own tables or a real Bengaluru classified count — see §5 below for what that residual work involves.
   </div>
 
   <h3 style="font-size:15px; margin-top:28px;">Induced demand &amp; the traffic-assignment gap</h3>
@@ -337,11 +340,11 @@
   <h2>5. Honest gaps in this tool (and what would close them)</h2>
   <p class="section-sub">The same audit now in <code>docs/RESEARCH.md</code> §6, in plain language.</p>
   <ol class="gap-list">
-    <li><span class="gap-num">1</span><span class="gap-title">No PCU conversion</span>
-      <p>Biggest gap for an Indian city specifically — see the PCU table above. Fix: re-derive every corridor's volume/capacity in PCU/hour per IRC:106 before trusting any v/c ratio here operationally.</p>
+    <li><span class="gap-num">1</span><span class="gap-title">No PCU conversion — <em>fixed</em></span>
+      <p>The 3D simulator now converts every corridor's volume to Passenger Car Units by default (toggle it off to compare). What's NOT yet fixed: the 1800 PCU/hour/lane capacity figure and the illustrative vehicle-mix percentages are still round numbers, not looked up from IRC:106's tables or a real Bengaluru classified count.</p>
     </li>
-    <li><span class="gap-num">2</span><span class="gap-title">No Level of Service (LOS) framing</span>
-      <p>This tool's own severity scale was never connected to the standard A-F vocabulary. Partly addressed by the table in §3 above; a full fix would surface LOS directly in the app's own UI, not just this article.</p>
+    <li><span class="gap-num">2</span><span class="gap-title">No Level of Service (LOS) framing — <em>fixed</em></span>
+      <p>Every corridor in the 3D simulator now shows a live A-F grade (route summary, edge cards, and the bottleneck recommendation), using the same thresholds tabulated in §3.</p>
     </li>
     <li><span class="gap-num">3</span><span class="gap-title">No real traffic assignment/equilibrium</span>
       <p>The 3D simulator recomputes a fixed shortest path only. A real fix needs an origin-destination demand matrix and a Wardrop-equilibrium solver — a genuinely bigger undertaking, appropriately left as future work rather than bolted on.</p>
@@ -375,7 +378,7 @@
   <ul class="questions">
     <li>Pick a proximity-conflict zone from the Recommendations tab. Using the Avoid-Shift-Improve framework (§2), propose one intervention from each category for that specific zone.</li>
     <li>In the 3D simulator, widen a corridor by several lanes and recalculate. Does the network-wide total travel time drop by the same percentage as the route itself? If not, what does that gap suggest about where the real bottleneck moved to?</li>
-    <li>This tool assumes 1800 vehicles/hour/lane capacity, uncorrected for vehicle mix. Using the PCU table in §3, recompute the effective capacity of a lane carrying a mix of 40% two-wheelers, 20% autos, 30% cars, and 10% buses/trucks. How does the corrected v/c ratio (and therefore the predicted delay) change?</li>
+    <li>Using the PCU table in §3 and a lane carrying a mix of 40% two-wheelers, 20% autos, 30% cars, and 10% buses/trucks, hand-calculate the PCU-equivalent volume for a raw count of 3000 vehicles/hour. Then toggle "Use PCU-adjusted capacity" off and on for a route in the 3D simulator and compare its own reported PCU/hour figure (note: the simulator's default mix differs from this exercise's — that's deliberate, to make you actually do the substitution rather than just read off the tool's number).</li>
     <li>Compare Singapore's ERP and London's congestion charge (§2). Which approach do you think would face more political resistance if proposed for Bengaluru, and why?</li>
     <li>Induced demand (§3) suggests widening a road doesn't durably fix congestion. Given that, is a road-widening recommendation from this tool's 3D simulator ever still a reasonable thing to act on? Under what conditions?</li>
     <li>Pick one gap from §5. If you had one semester to close it, what's the first concrete step you'd take?</li>
