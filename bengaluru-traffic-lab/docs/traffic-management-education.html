@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Understanding &amp; Managing Urban Traffic</title>
+<style>
+  :root {
+    --ink: #1c1b1f; --ink-secondary: #4a4750; --ink-muted: #79757f;
+    --hairline: #e4e0e8; --bg: #faf9fb; --card-bg: #ffffff;
+    --risk-none: #cbb9ea; --risk-elevated: #a172dd; --risk-high: #7a3fcf; --risk-extreme: #4a148c;
+    --accent-2: #0ca30c; --accent-3: #d98c00;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  a { color: var(--risk-high); }
+  header.top {
+    padding: 14px 24px; border-bottom: 1px solid var(--hairline); background: var(--card-bg);
+    display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
+  }
+  header.top nav { font-size: 12.5px; display: flex; gap: 16px; }
+  header.top nav a { text-decoration: none; font-weight: 600; }
+  header.top nav a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+  .hero { padding: 48px 0 28px; }
+  .hero h1 { font-size: 30px; margin: 0 0 12px; line-height: 1.25; }
+  .hero p.lede { font-size: 16px; color: var(--ink-secondary); max-width: 720px; }
+  .hero .tags { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; background: #f4eefc; color: var(--risk-high); padding: 4px 10px; border-radius: 999px; }
+
+  section { padding: 36px 0; border-top: 1px solid var(--hairline); }
+  section h2 { font-size: 21px; margin: 0 0 6px; }
+  section p.section-sub { color: var(--ink-muted); font-size: 13.5px; margin: 0 0 22px; max-width: 680px; }
+
+  .warn-card, .info-card {
+    border-radius: 10px; padding: 14px 18px; font-size: 13px; line-height: 1.55; margin: 16px 0;
+  }
+  .warn-card { background: #fef3dc; border: 1px solid #f0d999; color: #6b4e00; }
+  .info-card { background: #f4eefc; border: 1px solid #ddc9f5; color: #3a2660; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 8px; }
+  .card {
+    border: 1px solid var(--hairline); border-radius: 12px; padding: 16px; background: var(--card-bg);
+  }
+  .card h3 { margin: 0 0 4px; font-size: 14.5px; }
+  .card .city-tag {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    padding: 2px 8px; border-radius: 999px; color: #fff; margin-bottom: 8px;
+  }
+  .card .city-tag.avoid { background: var(--accent-2); }
+  .card .city-tag.shift { background: var(--accent-3); }
+  .card .city-tag.improve { background: var(--risk-high); }
+  .card p { font-size: 12.5px; color: var(--ink-secondary); margin: 6px 0 0; }
+  .card .cite { font-size: 10.5px; color: var(--ink-muted); margin-top: 8px; font-style: italic; }
+
+  .bar-chart { margin: 20px 0; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12.5px; }
+  .bar-row .bar-label { width: 190px; flex-shrink: 0; color: var(--ink-secondary); }
+  .bar-track { flex: 1; height: 20px; background: #f2f1ee; border-radius: 4px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 4px; background: var(--risk-high); }
+  .bar-value { width: 50px; flex-shrink: 0; font-weight: 700; text-align: right; }
+  .chart-caption { font-size: 11px; color: var(--ink-muted); margin-top: 4px; }
+
+  .asi-diagram { display: flex; gap: 0; margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--hairline); }
+  .asi-step { flex: 1; padding: 18px 16px; color: #fff; }
+  .asi-step h4 { margin: 0 0 6px; font-size: 14px; }
+  .asi-step p { margin: 0; font-size: 11.5px; opacity: 0.95; }
+  .asi-step.avoid { background: var(--accent-2); }
+  .asi-step.shift { background: var(--accent-3); }
+  .asi-step.improve { background: var(--risk-high); }
+
+  .fourstep-diagram { display: flex; align-items: stretch; gap: 6px; margin: 20px 0; flex-wrap: wrap; }
+  .fourstep-box {
+    flex: 1; min-width: 140px; border: 2px solid var(--hairline); border-radius: 10px; padding: 12px; font-size: 12px; text-align: center; position: relative;
+  }
+  .fourstep-box.covered { border-color: var(--risk-high); background: #f4eefc; }
+  .fourstep-box .step-num { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .fourstep-box .step-status { display: block; margin-top: 6px; font-size: 10px; font-weight: 700; }
+  .fourstep-box.covered .step-status { color: var(--risk-high); }
+  .fourstep-box:not(.covered) .step-status { color: var(--ink-muted); }
+  .fourstep-arrow { display: flex; align-items: center; font-size: 18px; color: var(--ink-muted); }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 16px 0; }
+  table.data-table th, table.data-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--hairline); }
+  table.data-table th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-muted); }
+  table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .los-A { color: #0ca30c; font-weight: 700; }
+  .los-B { color: #6ca30c; font-weight: 700; }
+  .los-C { color: var(--accent-3); font-weight: 700; }
+  .los-D { color: #c77400; font-weight: 700; }
+  .los-E { color: var(--risk-high); font-weight: 700; }
+  .los-F { color: var(--risk-extreme); font-weight: 700; }
+
+  dl.glossary dt { font-weight: 700; font-size: 13.5px; margin-top: 14px; }
+  dl.glossary dd { margin: 4px 0 0; font-size: 13px; color: var(--ink-secondary); }
+
+  ol.lesson-plan, ul.questions { font-size: 13.5px; color: var(--ink-secondary); padding-left: 22px; }
+  ol.lesson-plan li, ul.questions li { margin-bottom: 10px; }
+
+  .gap-list { list-style: none; padding: 0; margin: 16px 0 0; }
+  .gap-list li { border: 1px solid var(--hairline); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; font-size: 13px; }
+  .gap-list .gap-num {
+    display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--risk-high); color: #fff; font-size: 11px; font-weight: 700; margin-right: 8px;
+  }
+  .gap-list .gap-title { font-weight: 700; }
+  .gap-list p { margin: 6px 0 0 28px; color: var(--ink-secondary); font-size: 12.5px; }
+
+  .refs { font-size: 12px; color: var(--ink-secondary); }
+  .refs li { margin-bottom: 8px; }
+
+  footer { padding: 30px 24px 60px; text-align: center; font-size: 12px; color: var(--ink-muted); }
+
+  @media (max-width: 640px) {
+    .asi-diagram { flex-direction: column; }
+    .fourstep-diagram { flex-direction: column; }
+    .fourstep-arrow { justify-content: center; transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <strong>Bengaluru Traffic Lab</strong>
+  <nav>
+    <a href="./google-map.html">Congestion map &amp; reports</a>
+    <a href="./city-3d.html">3D route simulator</a>
+  </nav>
+</header>
+
+<div class="wrap hero">
+  <div class="tags"><span class="tag">Article</span><span class="tag">Education</span><span class="tag">Case studies</span></div>
+  <h1>Understanding &amp; Managing Urban Traffic: What We Built, What the World Has Tried, and What's Still Missing</h1>
+  <p class="lede">
+    This page ties together three things: a plain-language recap of the congestion-analysis tool in this project,
+    a tour of how other cities have actually managed traffic (visualized, with the frameworks planners use to talk
+    about it), and an honest, expert-style audit of this tool's own gaps — written to be usable directly in a
+    classroom, not just as marketing copy for the project.
+  </p>
+</div>
+
+<section id="what-we-built" class="wrap">
+  <h2>1. What this project actually built</h2>
+  <p class="section-sub">A recurring-congestion model for Bengaluru, a road-improvement simulator, and where each piece sits inside how transportation planners actually reason about a city.</p>
+
+  <p>
+    Starting from "religious-calendar-aware congestion" as the first variable, this project grew to model five
+    recurring congestion generators for 33 sample Bengaluru locations — religious sites (weekly peak days +
+    festival dates), schools (drop-off/pickup), IT campuses (shift-change), heavy-vehicle entry-timing corridors,
+    and parking/market saturation — plus a <strong>proximity-conflict detector</strong> that flags when two of
+    these sit close together and are active the same day (e.g. a school next to a truck corridor). That feeds a
+    Recommendations report and a Turn Shift (median-relocation) triage tool. Separately, a
+    <a href="./city-3d.html">3D route simulator</a> lets you drive between two junctions on Google's real
+    Photorealistic 3D Tiles over an illustrative 23-junction Bengaluru road skeleton, and see how widening a road,
+    resurfacing it, or rerouting traffic during a festival changes predicted travel time, using the standard
+    Bureau of Public Roads (BPR) volume-delay formula.
+  </p>
+
+  <div class="info-card">
+    <strong>Where this fits in the standard planning process.</strong> Professional transportation planning
+    typically follows a "four-step" travel demand model. This project's BPR/routing work is entirely inside
+    step 4 — everything upstream of it (how many trips get made, where they go, which mode people choose) is
+    assumed, not modeled. That's a deliberate, honest scope limit, shown below.
+  </div>
+
+  <div class="fourstep-diagram">
+    <div class="fourstep-box"><span class="step-num">Step 1</span><br>Trip generation<span class="step-status">Not modeled</span></div>
+    <div class="fourstep-arrow">→</div>
+    <div class="fourstep-box"><span class="step-num">Step 2</span><br>Trip distribution<span class="step-status">Not modeled</span></div>
+    <div class="fourstep-arrow">→</div>
+    <div class="fourstep-box"><span class="step-num">Step 3</span><br>Mode choice<span class="step-status">Not modeled</span></div>
+    <div class="fourstep-arrow">→</div>
+    <div class="fourstep-box covered"><span class="step-num">Step 4</span><br>Route assignment<span class="step-status">✓ This project (BPR + shortest path)</span></div>
+  </div>
+  <p class="chart-caption">The classic four-step urban transportation planning model (trip generation → distribution → mode choice → route assignment), a staple of transportation-planning curricula since the 1950s-60s MPO modeling era. This project's congestion-generator variables (schools, IT, etc.) are a novel addition layered on top of step 4 — they approximate WHERE demand concentrates without formally modeling steps 1-3.</p>
+</section>
+
+<section id="global-practices" class="wrap">
+  <h2>2. How other cities have actually managed traffic</h2>
+  <p class="section-sub">Grouped by the "Avoid–Shift–Improve" (ASI) framework — a standard way transportation planners categorize interventions, from the GIZ Sustainable Urban Transport Sourcebook and widely used in sustainable-transport policy literature.</p>
+
+  <div class="asi-diagram">
+    <div class="asi-step avoid"><h4>Avoid</h4><p>Reduce the need to travel at all — land-use planning, mixed-use development, remote work policy.</p></div>
+    <div class="asi-step shift"><h4>Shift</h4><p>Move trips to more space-efficient modes — walking, cycling, public transit, carpooling.</p></div>
+    <div class="asi-step improve"><h4>Improve</h4><p>Make the vehicle trips that remain more efficient — better signals, cleaner engines, ITS, road design.</p></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <span class="city-tag improve">Improve</span>
+      <h3>Singapore — Electronic Road Pricing (ERP)</h3>
+      <p>Dynamic, per-gantry congestion pricing since 1998 (evolved from the world's first road-pricing scheme, the 1975 Area Licensing Scheme), paired with a vehicle-quota Certificate of Entitlement system that caps car ownership growth. Widely cited as the most mature road-pricing regime in the world.</p>
+      <div class="cite">Source: Singapore Land Transport Authority; widely covered in transport-economics literature on congestion pricing.</div>
+    </div>
+    <div class="card">
+      <span class="city-tag improve">Improve</span>
+      <h3>London — Congestion Charge</h3>
+      <p>A flat daily fee for driving into central London since 2003, with revenue required by law to be reinvested in transport. Widely cited estimates put the early reduction in traffic entering the zone at roughly 20-30%.</p>
+      <div class="cite">Source: Transport for London program reports; verify exact current-year figures before citing precisely, as the scheme and zone have changed since 2003.</div>
+    </div>
+    <div class="card">
+      <span class="city-tag improve">Improve</span>
+      <h3>Stockholm — Congestion Tax</h3>
+      <p>Introduced as a trial, made permanent after a public referendum — a rare example of road pricing winning democratic approval after residents experienced it. Academic studies (Eliasson et al.) cite roughly a 20% reduction in traffic across the cordon.</p>
+      <div class="cite">Source: Jonas Eliasson's published evaluations of the Stockholm trial (Transportation Research literature).</div>
+    </div>
+    <div class="card">
+      <span class="city-tag shift">Shift</span>
+      <h3>Bogotá &amp; Curitiba — Bus Rapid Transit (BRT)</h3>
+      <p>Curitiba (Jaime Lerner, 1970s) pioneered dedicated busways integrated with land use; Bogotá's TransMilenio scaled the idea into one of the world's highest-capacity bus systems, at a fraction of a metro's construction cost — the reference case study for BRT in transport-planning courses worldwide.</p>
+      <div class="cite">Source: ITDP (Institute for Transportation and Development Policy) BRT case studies.</div>
+    </div>
+    <div class="card">
+      <span class="city-tag shift">Shift</span>
+      <h3>Netherlands — Cycling Infrastructure &amp; "Sustainable Safety"</h3>
+      <p>Decades of sustained investment in protected cycling infrastructure, plus the "Duurzaam Veilig" (Sustainable Safety) doctrine — designing roads so a driver's mistake doesn't have to be fatal, rather than only relying on driver behavior. A foundational reference in road-safety engineering.</p>
+      <div class="cite">Source: SWOV Institute for Road Safety Research (Netherlands).</div>
+    </div>
+    <div class="card">
+      <span class="city-tag improve">Improve</span>
+      <h3>Los Angeles — ATSAC Adaptive Signals</h3>
+      <p>One of the world's oldest computerized adaptive traffic-signal control systems (built for the 1984 Olympics, still evolving), automatically adjusting signal timing to real-time flow rather than fixed schedules.</p>
+      <div class="cite">Source: City of Los Angeles Department of Transportation.</div>
+    </div>
+    <div class="card">
+      <span class="city-tag improve">Improve</span>
+      <h3>Hangzhou, China — "City Brain"</h3>
+      <p>A citywide AI/computer-vision traffic-control platform (built with Alibaba Cloud) that adjusts signal timing from real-time camera and sensor data across the whole city — an often-cited example of large-scale ITS (Intelligent Transportation Systems) deployment.</p>
+      <div class="cite">Source: Widely covered in ITS-industry and smart-city literature; verify current scale/results against a primary source before citing specific numbers.</div>
+    </div>
+    <div class="card">
+      <span class="city-tag avoid">Avoid</span>
+      <h3>Tokyo — Proof-of-Parking Requirement</h3>
+      <p>Since 1962, Tokyo has required proof of an off-street parking space (shako shomeisho) before a car can be registered — an "avoid" and demand-management measure that prevents street-parking congestion at the source, alongside one of the world's most extensive rail networks reducing car dependency in the first place.</p>
+      <div class="cite">Source: Well-documented in Japanese urban-transport policy literature.</div>
+    </div>
+    <div class="card">
+      <span class="city-tag avoid">Avoid</span>
+      <h3>Delhi — Odd-Even Vehicle Rationing</h3>
+      <p>A short-term demand-rationing scheme (private cars allowed on alternate days by odd/even license plate, during pollution emergencies) — a directly relevant Indian precedent showing demand-management tools are already politically viable here, even if evidence on its actual congestion/pollution impact is mixed.</p>
+      <div class="cite">Source: Delhi Government notifications and subsequent independent evaluations (mixed findings on effectiveness — a good classroom discussion point in itself).</div>
+    </div>
+    <div class="card">
+      <span class="city-tag improve">Improve</span>
+      <h3>Bengaluru — B-ATCS</h3>
+      <p>Bengaluru's own Adaptive Traffic Control System, already covered in this project's earlier research (see Sources below) — the existing local "Improve" intervention this tool's proximity-conflict and Recommendations analysis is meant to help prioritize, not replace.</p>
+      <div class="cite">Source: docs/RESEARCH.md §1 (this project).</div>
+    </div>
+  </div>
+
+  <div class="bar-chart">
+    <h3 style="font-size:14px;">Illustrative: widely cited traffic-reduction outcomes from congestion pricing</h3>
+    <div class="bar-row"><div class="bar-label">Stockholm congestion tax</div><div class="bar-track"><div class="bar-fill" style="width:20%; background:var(--risk-high);"></div></div><div class="bar-value">~20%</div></div>
+    <div class="bar-row"><div class="bar-label">London congestion charge</div><div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--risk-high);"></div></div><div class="bar-value">~20-30%</div></div>
+    <div class="bar-row"><div class="bar-label">Singapore ERP (peak period)</div><div class="bar-track"><div class="bar-fill" style="width:15%; background:var(--risk-high);"></div></div><div class="bar-value">~10-15%</div></div>
+    <p class="chart-caption">Figures are widely cited ballpark estimates from the sources noted above (Eliasson for Stockholm; TfL program reports for London; LTA/academic literature for Singapore) for illustrating relative scale in a classroom setting — not verified, current-year, or precisely comparable numbers (different cities measure "traffic reduction" differently). Verify against the original study before citing precisely in any real report.</p>
+  </div>
+</section>
+
+<section id="frameworks" class="wrap">
+  <h2>3. Concepts &amp; frameworks a transportation course would expect</h2>
+  <p class="section-sub">The vocabulary this tool's own severity scale and BPR model connect to, but never explains on their own.</p>
+
+  <h3 style="font-size:15px;">Level of Service (LOS)</h3>
+  <p>The standard way US/India transportation engineering describes how well a road is operating, graded A (free flow) to F (breakdown/gridlock), usually tied to volume/capacity (v/c) ratio.</p>
+  <table class="data-table">
+    <thead><tr><th>LOS</th><th>Typical v/c ratio</th><th>Driving experience</th><th>Roughly maps to this tool's scale</th></tr></thead>
+    <tbody>
+      <tr><td class="los-A">A</td><td class="num">&lt; 0.35</td><td>Free flow</td><td>None</td></tr>
+      <tr><td class="los-B">B</td><td class="num">0.35 – 0.54</td><td>Stable, minor delay</td><td>None / Elevated</td></tr>
+      <tr><td class="los-C">C</td><td class="num">0.55 – 0.74</td><td>Stable, noticeable delay</td><td>Elevated</td></tr>
+      <tr><td class="los-D">D</td><td class="num">0.75 – 0.89</td><td>Approaching unstable</td><td>High</td></tr>
+      <tr><td class="los-E">E</td><td class="num">0.90 – 1.0</td><td>At capacity, unstable</td><td>High / Extreme</td></tr>
+      <tr><td class="los-F">F</td><td class="num">&gt; 1.0</td><td>Breakdown, stop-and-go</td><td>Extreme</td></tr>
+    </tbody>
+  </table>
+  <p class="chart-caption">Thresholds shown are illustrative/typical values from Highway Capacity Manual-style LOS tables, not a precise universal standard (exact break points vary by facility type and edition) — the mapping to this tool's own scale is this project's own approximation, not an official crosswalk.</p>
+
+  <h3 style="font-size:15px; margin-top:28px;">Passenger Car Unit (PCU) — the correction this tool still needs</h3>
+  <p>
+    The BPR model in this project (and the Highway Capacity Manual it borrows from) assumes homogeneous,
+    lane-disciplined traffic. Indian traffic engineering instead uses PCU: every vehicle type is converted to an
+    equivalent number of passenger cars before computing volume or capacity, because a mixed stream of
+    two-wheelers, autos, cars, and buses doesn't behave like a stream of identical cars.
+  </p>
+  <table class="data-table">
+    <thead><tr><th>Vehicle type</th><th>Typical PCU factor (IRC:106 style)</th></tr></thead>
+    <tbody>
+      <tr><td>Two-wheeler / motorcycle</td><td class="num">~0.5</td></tr>
+      <tr><td>Auto-rickshaw</td><td class="num">~0.8</td></tr>
+      <tr><td>Car / passenger car</td><td class="num">1.0 (the reference unit)</td></tr>
+      <tr><td>Bus / truck</td><td class="num">~3.0</td></tr>
+    </tbody>
+  </table>
+  <div class="warn-card">
+    <strong>This project doesn't do this yet.</strong> <code>bpr.py</code> and <code>road_network.py</code> use
+    plain vehicle counts. A corridor's real capacity and effective volume in Bengaluru's actual mixed traffic
+    would need every count above converted to PCU/hour first — see §5 below and the code's own docstrings for
+    where this is flagged as a known limitation, not silently assumed away.
+  </div>
+
+  <h3 style="font-size:15px; margin-top:28px;">Induced demand &amp; the traffic-assignment gap</h3>
+  <p>
+    A classic, well-evidenced finding in transportation economics: widening a congested road often attracts new
+    trips (people who previously avoided that route, traveled at a different time, or used another mode) until
+    congestion returns toward its previous level — sometimes called the "fundamental law of road congestion" or,
+    in its transit-competing form, the Downs-Thomson paradox. This project's 3D simulator computes a network-wide
+    total-travel-time figure specifically to gesture at this (a change that helps one corridor but doesn't reduce,
+    or even increases, the network-wide total is a warning sign) — but it does NOT run a real traffic-assignment
+    model (Wardrop's user-equilibrium principle: every driver independently choosing their fastest route until no
+    one can do better by switching), so it cannot actually reproduce induced demand — only hint at where a real
+    study should check for it.
+  </p>
+</section>
+
+<section id="recommendations" class="wrap">
+  <h2>4. Suggested solutions for Bengaluru, combining global practice with this tool's own findings</h2>
+  <p class="section-sub">Not a new analysis — a synthesis of what the Report ▸ Recommendations tab already computes, read through the Avoid-Shift-Improve lens above.</p>
+  <ul>
+    <li><strong>Avoid:</strong> stagger IT campus shift timings and school start/end times across a shared corridor (already surfaced per-zone in the Recommendations tab) — the cheapest lever, needs coordination rather than construction.</li>
+    <li><strong>Avoid:</strong> continue and expand odd-even-style or zonal demand rationing only as a short-term/emergency tool (per Delhi's mixed evidence above) — not a long-term substitute for the other levers.</li>
+    <li><strong>Shift:</strong> the proximity-conflict zones this tool flags (e.g. a school beside a truck corridor) are exactly the corridors where a protected footpath/cycle lane and a safe school-zone crossing would do double duty — reducing exposure at the highest-conflict points identified, not city-wide guesswork.</li>
+    <li><strong>Shift:</strong> BMTC/Namma Metro capacity on the highest-severity IT/ORR corridors this tool identifies (Marathahalli-Bellandur, Silk Board approaches) — this tool doesn't model transit itself (see gap #4 below), so this is a direction, not a modeled result.</li>
+    <li><strong>Improve:</strong> strictly enforce heavy-vehicle entry-timing windows at the corridors this tool flags, ideally with a dedicated entry bay (matches this tool's own truck-corridor recommendation logic).</li>
+    <li><strong>Improve:</strong> extend Bengaluru's existing B-ATCS adaptive-signal coverage to the specific junctions this tool's Concern Ranking and Recommendations tab surface as chronic — prioritization input, not a replacement for the engineering study each junction still needs.</li>
+  </ul>
+</section>
+
+<section id="gaps" class="wrap">
+  <h2>5. Honest gaps in this tool (and what would close them)</h2>
+  <p class="section-sub">The same audit now in <code>docs/RESEARCH.md</code> §6, in plain language.</p>
+  <ol class="gap-list">
+    <li><span class="gap-num">1</span><span class="gap-title">No PCU conversion</span>
+      <p>Biggest gap for an Indian city specifically — see the PCU table above. Fix: re-derive every corridor's volume/capacity in PCU/hour per IRC:106 before trusting any v/c ratio here operationally.</p>
+    </li>
+    <li><span class="gap-num">2</span><span class="gap-title">No Level of Service (LOS) framing</span>
+      <p>This tool's own severity scale was never connected to the standard A-F vocabulary. Partly addressed by the table in §3 above; a full fix would surface LOS directly in the app's own UI, not just this article.</p>
+    </li>
+    <li><span class="gap-num">3</span><span class="gap-title">No real traffic assignment/equilibrium</span>
+      <p>The 3D simulator recomputes a fixed shortest path only. A real fix needs an origin-destination demand matrix and a Wardrop-equilibrium solver — a genuinely bigger undertaking, appropriately left as future work rather than bolted on.</p>
+    </li>
+    <li><span class="gap-num">4</span><span class="gap-title">No non-motorized modes or public transit</span>
+      <p>Pedestrians, cyclists, BMTC, and Namma Metro are entirely absent, despite carrying a large share of actual trips. Fix: a genuinely separate modeling effort, not a checkbox to add.</p>
+    </li>
+    <li><span class="gap-num">5</span><span class="gap-title">No intersection/signal-timing modeling</span>
+      <p>Everything here is link-level; real urban delay is dominated by intersections. A different sub-discipline this tool doesn't touch at all.</p>
+    </li>
+    <li><span class="gap-num">6</span><span class="gap-title">No glossary/concept scaffolding</span>
+      <p>Addressed by this page's Glossary section below — the first pass, not the last word; ideally this becomes inline tooltips inside the app itself too.</p>
+    </li>
+  </ol>
+</section>
+
+<section id="classroom" class="wrap">
+  <h2>6. Using this in a classroom</h2>
+  <p class="section-sub">A suggested single-session lesson plan and discussion questions, aimed at an introductory urban-studies, civic-tech, or first-year transportation-planning audience.</p>
+
+  <h3 style="font-size:15px;">Suggested lesson flow (60-90 minutes)</h3>
+  <ol class="lesson-plan">
+    <li><strong>Frame (10 min):</strong> introduce the four-step travel demand model (§1) and where this tool sits inside it.</li>
+    <li><strong>Explore (20 min):</strong> open the <a href="./google-map.html">congestion map</a>, step through a few days, and find one location whose Concern Ranking sparkline shows a chronic (weekly) pattern versus one whose peak is a one-off festival — discuss why those need different interventions.</li>
+    <li><strong>Diagnose (15 min):</strong> open Report ▸ Recommendations, find a proximity-conflict-flagged zone, and read its recommended action against the "Conflict" badge's own explanation.</li>
+    <li><strong>Simulate (20 min):</strong> in the <a href="./city-3d.html">3D simulator</a>, pick a route, record the baseline travel time, widen the route's worst-v/c-ratio segment, and recalculate — compare the route-level and network-wide % change.</li>
+    <li><strong>Critique (15-20 min):</strong> work through the discussion questions below, explicitly using §5's gap list.</li>
+  </ol>
+
+  <h3 style="font-size:15px; margin-top:24px;">Discussion questions</h3>
+  <ul class="questions">
+    <li>Pick a proximity-conflict zone from the Recommendations tab. Using the Avoid-Shift-Improve framework (§2), propose one intervention from each category for that specific zone.</li>
+    <li>In the 3D simulator, widen a corridor by several lanes and recalculate. Does the network-wide total travel time drop by the same percentage as the route itself? If not, what does that gap suggest about where the real bottleneck moved to?</li>
+    <li>This tool assumes 1800 vehicles/hour/lane capacity, uncorrected for vehicle mix. Using the PCU table in §3, recompute the effective capacity of a lane carrying a mix of 40% two-wheelers, 20% autos, 30% cars, and 10% buses/trucks. How does the corrected v/c ratio (and therefore the predicted delay) change?</li>
+    <li>Compare Singapore's ERP and London's congestion charge (§2). Which approach do you think would face more political resistance if proposed for Bengaluru, and why?</li>
+    <li>Induced demand (§3) suggests widening a road doesn't durably fix congestion. Given that, is a road-widening recommendation from this tool's 3D simulator ever still a reasonable thing to act on? Under what conditions?</li>
+    <li>Pick one gap from §5. If you had one semester to close it, what's the first concrete step you'd take?</li>
+  </ul>
+</section>
+
+<section id="glossary" class="wrap">
+  <h2>7. Glossary</h2>
+  <dl class="glossary">
+    <dt>BPR (Bureau of Public Roads) function</dt>
+    <dd>The standard formula estimating travel time as a road's traffic volume approaches its capacity: travel_time = free_flow_time × (1 + 0.15×(volume/capacity)⁴). Used throughout this project's route simulator.</dd>
+    <dt>Volume/capacity (v/c) ratio</dt>
+    <dd>Traffic volume on a road segment divided by its capacity. Above 1.0 means demand exceeds what the road can carry — the core input to both LOS and the BPR function.</dd>
+    <dt>Level of Service (LOS)</dt>
+    <dd>A letter grade (A-F) transportation engineers use to describe how well a facility is operating, usually derived from the v/c ratio. See the table in §3.</dd>
+    <dt>Passenger Car Unit (PCU)</dt>
+    <dd>An equivalence factor converting any vehicle type to "how many cars' worth of road space it effectively uses" — essential in heterogeneous traffic like India's. See §3.</dd>
+    <dt>Betweenness centrality</dt>
+    <dd>A graph-theory measure (used in this project's <code>criticality.py</code>) of how often a road segment lies on the shortest path between other points in the network — a proxy for how disruptive closing that segment would be.</dd>
+    <dt>Avoid-Shift-Improve (ASI)</dt>
+    <dd>A framework for categorizing sustainable-transport interventions: avoid unnecessary trips, shift remaining trips to efficient modes, improve the efficiency of what's left. See §2.</dd>
+    <dt>Wardrop's (user) equilibrium</dt>
+    <dd>The traffic-assignment principle that, in equilibrium, no driver can reduce their own travel time by unilaterally switching routes — the theoretical basis for real network-wide traffic assignment, which this project does not implement (see §3, §5).</dd>
+    <dt>Induced demand</dt>
+    <dd>The observed tendency for added road capacity to attract new trips, eroding some or all of the expected congestion relief. See §3.</dd>
+    <dt>Intelligent Transportation Systems (ITS)</dt>
+    <dd>The umbrella term for technology-based traffic management — adaptive signals (like Bengaluru's B-ATCS or LA's ATSAC), real-time monitoring, and AI-based control (like Hangzhou's City Brain).</dd>
+    <dt>Bus Rapid Transit (BRT)</dt>
+    <dd>High-capacity bus service on dedicated lanes/busways, offering rail-like capacity at a fraction of the construction cost — pioneered in Curitiba, scaled in Bogotá's TransMilenio. See §2.</dd>
+  </dl>
+</section>
+
+<section id="sources" class="wrap">
+  <h2>8. Sources &amp; further reading</h2>
+  <p class="section-sub">Named by publisher/author rather than linked — verify current URLs yourself before citing these in formal work, since this page doesn't have live web access to confirm them.</p>
+  <ul class="refs">
+    <li>Singapore Land Transport Authority — Electronic Road Pricing program documentation.</li>
+    <li>Transport for London — Congestion Charge scheme reports and evaluations.</li>
+    <li>Jonas Eliasson — published evaluations of the Stockholm congestion tax trial (Transportation Research literature).</li>
+    <li>ITDP (Institute for Transportation and Development Policy) — Bus Rapid Transit case studies (Curitiba, Bogotá TransMilenio).</li>
+    <li>SWOV Institute for Road Safety Research (Netherlands) — "Duurzaam Veilig" (Sustainable Safety) doctrine.</li>
+    <li>City of Los Angeles Department of Transportation — ATSAC adaptive signal system documentation.</li>
+    <li>GIZ Sustainable Urban Transport Sourcebook — origin of the Avoid-Shift-Improve framework.</li>
+    <li>Indian Roads Congress, IRC:106 — Passenger Car Unit and capacity guidance for Indian mixed traffic.</li>
+    <li>US Transportation Research Board / FHWA — Highway Capacity Manual (Level of Service definitions) and the original Bureau of Public Roads (1964) volume-delay function.</li>
+    <li>John Glen Wardrop (1952) — the user-equilibrium principle underlying real traffic assignment.</li>
+    <li><code>docs/RESEARCH.md</code> in this project — the fuller research log this page's §1 and §5 summarize, including the ASCE/TRB U-turn-relocation literature cited in the Turn Shift tab.</li>
+  </ul>
+</section>
+
+<footer>
+  Part of the Bengaluru Traffic Lab project — <a href="./google-map.html">congestion map &amp; reports</a> ·
+  <a href="./city-3d.html">3D route simulator</a>. Every figure on this page is either this project's own
+  illustrative output or a widely cited ballpark estimate flagged as such — verify before relying on any of it
+  operationally.
+</footer>
+
+</body>
+</html>

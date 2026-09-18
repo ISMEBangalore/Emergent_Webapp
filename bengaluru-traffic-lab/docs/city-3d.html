@@ -131,7 +131,7 @@
 <header>
   <h1>Bengaluru 3D Route &amp; Road-Improvement Simulator</h1>
   <p class="sub">A car drive between two points on Google's real Photorealistic 3D Tiles, over an illustrative arterial-road skeleton — with a Bureau of Public Roads (BPR) volume-delay model showing how widening, resurfacing, or festival rerouting changes travel time.</p>
-  <nav><a href="./google-map.html">&larr; Back to the congestion-risk map &amp; reports</a></nav>
+  <nav><a href="./google-map.html">&larr; Back to the congestion-risk map &amp; reports</a> &nbsp;·&nbsp; <a href="./traffic-management-education.html">Global traffic management &amp; classroom guide →</a></nav>
 </header>
 
 <div class="warn-card">
@@ -156,6 +156,7 @@
       <label for="toSelect">To</label>
       <select id="toSelect"></select>
       <button type="button" class="primary" id="driveBtn">▶ Start drive</button>
+      <button type="button" class="secondary" id="recenterBtn">⌖ Re-center camera</button>
       <div id="routeSummary" class="route-summary" style="margin-top:12px;"></div>
     </div>
 
@@ -358,7 +359,8 @@
     renderRouteSummary(currentRoute, baselineStates);
     renderEdgeCards(currentRoute, baselineStates);
     document.getElementById("resultsCard").hidden = true;
-    drawRouteOn3DMap(currentRoute);
+    renderRouteGeometry(currentRoute);
+    fitCameraToRoute(currentRoute); // only place the camera moves on a fresh from/to selection
   }
 
   function renderRouteSummary(route, states) {
@@ -432,7 +434,7 @@
     latestStates = applyChanges(currentChanges);
     latestRoute = dijkstra(latestStates, fromSelect.value, toSelect.value);
     renderResults();
-    drawRouteOn3DMap(latestRoute, true);
+    renderRouteGeometry(latestRoute, true); // redraw only — never touches the camera
   }
 
   function renderResults() {
@@ -489,8 +491,9 @@
     renderEdgeCards(currentRoute, baselineStates);
     latestStates = baselineStates;
     latestRoute = currentRoute;
-    drawRouteOn3DMap(currentRoute);
+    renderRouteGeometry(currentRoute); // redraw only — never touches the camera
   });
+  document.getElementById("recenterBtn").addEventListener("click", () => fitCameraToRoute(currentRoute));
   fromSelect.addEventListener("change", computeAndRenderRoute);
   toSelect.addEventListener("change", computeAndRenderRoute);
 
@@ -508,7 +511,12 @@
     });
   }
 
-  function drawRouteOn3DMap(route, isAfter) {
+  // Draws/updates the route polyline + marker only — NEVER touches the
+  // camera. Safe to call on every recalculate() (lane/pavement/reroute
+  // edits keep the same from/to) without disturbing a zoom/pan the user
+  // has already done. Camera moves live only in fitCameraToRoute() below,
+  // called just once per genuinely new route (see computeAndRenderRoute).
+  function renderRouteGeometry(route, isAfter) {
     if (!map3dReady || !route) return;
     if (routePolyline) { routePolyline.remove(); routePolyline = null; }
     const coords = pathToCoords(route);
@@ -538,7 +546,16 @@
     } else {
       carMarker.position = coords[0];
     }
+  }
 
+  // The one place the camera moves programmatically, and only via the
+  // documented flyCameraTo() animation API (not by assigning .center/
+  // .range/.tilt directly) — direct property assignment during/around a
+  // manual zoom or pan is what was causing the 3D view to snap back or
+  // lose its tile detail whenever anything on the page re-rendered.
+  function fitCameraToRoute(route) {
+    if (!map3dReady || !route) return;
+    const coords = pathToCoords(route);
     const bounds = coords.reduce(
       (b, c) => ({
         lat: [Math.min(b.lat[0], c.lat), Math.max(b.lat[1], c.lat)],
@@ -546,9 +563,15 @@
       }),
       { lat: [coords[0].lat, coords[0].lat], lng: [coords[0].lng, coords[0].lng] }
     );
-    map3d.center = { lat: (bounds.lat[0] + bounds.lat[1]) / 2, lng: (bounds.lng[0] + bounds.lng[1]) / 2, altitude: 300 };
-    map3d.range = 6000;
-    map3d.tilt = 55;
+    map3d.flyCameraTo({
+      endCamera: {
+        center: { lat: (bounds.lat[0] + bounds.lat[1]) / 2, lng: (bounds.lng[0] + bounds.lng[1]) / 2, altitude: 300 },
+        range: 6000,
+        tilt: 55,
+        heading: 0,
+      },
+      durationMillis: 1200,
+    });
   }
 
   let driveAnimationHandle = null;
@@ -565,8 +588,13 @@
     segTimes.forEach((t) => cumFractions.push(cumFractions[cumFractions.length - 1] + t / totalTime));
 
     const startTs = performance.now();
-    let lastCameraUpdate = 0;
 
+    // Deliberately does NOT move the camera every frame (an earlier
+    // version did, via direct .center assignment) — that fought any
+    // manual zoom/pan the viewer tried mid-drive, which is what made the
+    // 3D view "not stay" when zooming. The car moves within whatever
+    // framing fitCameraToRoute() set (or the viewer's own current view);
+    // use "Re-center camera" to snap back to the fitted view any time.
     function frame(now) {
       const elapsed = (now - startTs) / 1000;
       const progress = Math.min(1, elapsed / PLAYBACK_SECONDS);
@@ -580,11 +608,6 @@
       const lng = a.lng + (b.lng - a.lng) * segProgress;
       if (carMarker) carMarker.position = { lat, lng, altitude: 40 };
 
-      if (now - lastCameraUpdate > 250) {
-        map3d.center = { lat, lng, altitude: 200 };
-        lastCameraUpdate = now;
-      }
-
       if (progress < 1) {
         driveAnimationHandle = requestAnimationFrame(frame);
       }
@@ -595,8 +618,8 @@
   // ---------- boot ----------
   // Route/BPR numbers on the left don't depend on the 3D map at all, so
   // they're computed immediately regardless of whether Photorealistic 3D
-  // Tiles load successfully — only drawRouteOn3DMap()/startDriveAnimation()
-  // are gated on map3dReady.
+  // Tiles load successfully — only renderRouteGeometry()/fitCameraToRoute()/
+  // startDriveAnimation() are gated on map3dReady.
   computeAndRenderRoute();
 
   function showMapFallback() {
@@ -627,7 +650,7 @@
         if (!settled) {
           settled = true;
           map3dReady = true;
-          if (currentRoute) drawRouteOn3DMap(currentRoute);
+          if (currentRoute) { renderRouteGeometry(currentRoute); fitCameraToRoute(currentRoute); }
         }
       });
       // Defensive timeout: some load failures land inside the custom

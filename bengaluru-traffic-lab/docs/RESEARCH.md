@@ -171,3 +171,46 @@ implemented (as landmark kinds `it_park`, `school`, `truck_corridor`, plus a new
    with normal internet access. `folium` (already listed as an optional dependency)
    is a reasonable alternative to hand-rolled SVG if that turns out to be easier once
    real OSM geometry is available.
+
+## 6. Traffic-engineering audit: gaps against real practice
+
+A self-critical pass against how this tool would read to a transportation-planning
+professional or be used in a classroom, done deliberately rather than assumed —
+findings below, ranked by how much they'd matter to someone actually relying on this
+(most cited/discussed in the Report ▸ Recommendations and 3D simulator pages
+themselves, which is where a reader would run into them):
+
+1. **No Passenger Car Unit (PCU) conversion.** `bpr.py`/`road_network.py` use plain
+   vehicle counts and a flat 1800 vph/lane capacity — a US Highway Capacity Manual
+   assumption for homogeneous, lane-disciplined traffic. Indian practice (IRC:106)
+   converts every vehicle type to a PCU equivalent (two-wheeler ≈0.5, auto-rickshaw
+   ≈0.8, bus/truck ≈3.0) before computing capacity, precisely because Indian traffic
+   is heterogeneous and doesn't hold lane discipline. This is the single most
+   consequential gap for an Indian city specifically — documented as a known
+   limitation in both modules' docstrings; a full fix means re-deriving every
+   corridor's volume/capacity in PCU/hour, not just relabeling units.
+2. **No Level of Service (LOS) framing.** The standard LOS A-F vocabulary a
+   transportation course teaches isn't connected to this tool's own
+   none/elevated/high/extreme severity scale anywhere.
+3. **No real traffic assignment/equilibrium.** The 3D simulator (`docs/city-3d.html`)
+   recomputes travel time on a fixed shortest path only — it doesn't model drivers
+   re-choosing routes network-wide the way Wardrop's principle describes. Honest as
+   an MVP simplification, but induced demand / Braess's paradox (why widening a road
+   doesn't always reduce congestion) is only implied by a percentage, never named.
+4. **No non-motorized modes or public transit.** Pedestrians, cyclists, BMTC buses,
+   and Namma Metro are entirely absent, despite carrying a large share of actual
+   Bengaluru trips — this tool only ever models private-vehicle corridors.
+5. **No intersection/signal-timing modeling.** Everything here is link-level
+   (mid-block corridor); a large share of real urban delay is intersection-level,
+   a different sub-discipline this tool doesn't touch.
+6. **No glossary/concept scaffolding** for classroom use — v/c ratio, betweenness
+   centrality, BPR, PCU, LOS are all used without an in-app definitions reference.
+   `docs/traffic-management-education.html` (added alongside this audit) is a first
+   pass at addressing this, alongside global case studies and a classroom-use guide.
+
+**Classroom-utility verdict:** suitable as an **introductory, exploratory** teaching
+aid for building intuition about multi-causal congestion and planning trade-offs
+(e.g. a first-year urban-studies or civic-tech elective) — not yet sufficient as the
+primary tool in a rigorous transportation-engineering course without a professor
+supplementing the PCU/LOS gap above. Items 1-2 and 6 are the highest-value, most
+tractable next steps; items 3-5 are legitimate future modules, not quick fixes.

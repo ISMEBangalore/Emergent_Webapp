@@ -20,6 +20,13 @@ standard per-lane capacity — see bpr.py) rather than a measured count;
 arterial segments are deliberately set close to (Silk Board: over)
 capacity, matching Bengaluru's well-known reputation for those corridors,
 collector segments comfortably under it.
+
+``base_volume_vph`` is a plain vehicle count, NOT a Passenger Car Unit
+(PCU) figure — see bpr.py's module docstring for why that matters for
+Indian traffic specifically (heterogeneous vehicle mix, no lane
+discipline, IRC:106 capacity guidance uses PCU/hour, not vehicles/hour).
+This skeleton doesn't model vehicle-type composition at all, so treat
+every volume/capacity ratio as a rough single-mode approximation.
 """
 from __future__ import annotations
 

@@ -17,6 +17,21 @@ assignment/equilibrium (real drivers re-choosing routes network-wide in
 response to a change) — only the direct effect on a given segment/path
 plus whatever explicit reroute the caller models. Treat outputs as
 directional (better/worse, roughly by how much), not as a traffic count.
+
+KNOWN GAP — no PCU conversion: ``volume_vph``/``lane_capacity_vph`` here
+are plain vehicle counts, which is the US Highway Capacity Manual
+assumption for homogeneous, lane-disciplined traffic. Indian practice
+(IRC:106-1990 and the "Indo-HCM") instead converts every vehicle type to
+a Passenger Car Unit (PCU) equivalent before computing capacity, because
+Indian traffic is heterogeneous and doesn't hold lane discipline — a
+two-wheeler is roughly 0.5 PCU, an auto-rickshaw roughly 0.8, a bus or
+truck roughly 3.0, so a road's real capacity and a corridor's real
+composition-adjusted volume can differ substantially from a raw vehicle
+count. ``DEFAULT_LANE_CAPACITY_VPH = 1800`` is therefore itself a
+homogeneous-traffic assumption, not an Indian-calibrated one. Treat every
+number this module produces as "roughly how much better/worse", not as a
+PCU-correct capacity analysis — a real study for an Indian corridor
+should re-derive capacity and volume in PCU/hour per IRC guidance first.
 """
 from __future__ import annotations
 
