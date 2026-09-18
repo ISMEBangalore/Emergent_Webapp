@@ -21,3 +21,19 @@ Whitefield temple (illustrative),temple_generic,12.9698,77.7500,400,Whitefield M
 Electronic City masjid (illustrative),masjid,12.8452,77.6602,350,Hosur Road
 HSR Layout hanuman temple (illustrative),hanuman_temple,12.9116,77.6389,300,27th Main Road
 Vijayanagar masjid (illustrative),masjid,12.9707,77.5350,350,Vijayanagar Main Road
+Silk Board school zone (illustrative),school,12.9180,77.6235,300,Hosur Road|Silk Board Junction
+Hebbal school zone (illustrative),school,13.0370,77.5990,300,Bellary Road|Outer Ring Road
+Whitefield school zone (illustrative),school,12.9820,77.7370,300,Whitefield Main Road|ITPL Main Road
+Basaveshwaranagar school zone (illustrative),school,12.9880,77.5450,300,Basaveshwaranagar Main Road
+Manyata Tech Park (illustrative boundary),it_park,13.0475,77.6197,500,Outer Ring Road|Nagawara-Hebbal Road
+Electronic City IT corridor (illustrative),it_park,12.8438,77.6642,500,Hosur Road|Electronic City Flyover
+Whitefield ITPL corridor (illustrative),it_park,12.9860,77.7360,500,ITPL Main Road|Whitefield Main Road
+Outer Ring Road IT corridor - Marathahalli (illustrative),it_park,12.9591,77.6974,500,Outer Ring Road
+Silk Board / Hosur Road corridor (illustrative),truck_corridor,12.9172,77.6228,400,Hosur Road|Silk Board Junction
+Hebbal / Bellary Road corridor (illustrative),truck_corridor,13.0358,77.5970,400,Bellary Road (NH44)
+Yeshwanthpur / Tumkur Road corridor (illustrative),truck_corridor,13.0280,77.5540,400,Tumkur Road (NH48)
+K R Puram / Old Madras Road corridor (illustrative),truck_corridor,12.9945,77.6950,400,Old Madras Road
+Commercial Street market zone (illustrative),parking_zone,12.9810,77.6050,350,Commercial Street
+Jayanagar 4th Block market zone (illustrative),parking_zone,12.9250,77.5830,350,Jayanagar 4th Block Complex
+Malleshwaram market zone (illustrative),parking_zone,13.0010,77.5730,350,Sampige Road|Margosa Road
+Marathahalli market zone (illustrative),parking_zone,12.9560,77.7010,350,Marathahalli Main Road

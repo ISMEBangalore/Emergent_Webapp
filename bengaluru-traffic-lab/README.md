@@ -26,7 +26,7 @@ traffic simulation this MVP doesn't build.
 | Module | Variable it addresses | What it does |
 |---|---|---|
 | `criticality.py` | #3 — critical roads | Ranks road segments by betweenness centrality, then simulates removing the top candidates to confirm real impact (does it disconnect the network / how much longer do detours get). |
-| `calendar_rules.py` + `landmarks.py` | #4 — religious-site congestion | Tags landmarks with a kind (masjid, hanuman_temple, shani_temple, church, ...) and a recurring weekly peak day, plus a festival calendar for one-off spikes (immersion processions, Eid, etc.). |
+| `calendar_rules.py` + `landmarks.py` | #4 — recurring-congestion generators | Tags landmarks with a kind and a recurring weekly peak day, plus a festival calendar for one-off spikes. Originally religious sites only (masjid, hanuman_temple, shani_temple, church, ...); now also covers schools, IT campuses/tech corridors, heavy-vehicle entry-timing corridors, and parking/market saturation zones — each with its own recurring days — plus a proximity-conflict check (`apply_proximity_escalation`) that escalates severity when two of these sit close together and are active the same day (e.g. a school near a truck corridor). |
 | `workzone_scheduler.py` | #2 — road-digging/utility work timing | Combines a road's criticality tier with the calendar risk of anything nearby to recommend allowed work hours or a hard blackout for a given date. |
 | `graph_io.py` | (shared) | Loads a road network from GraphML, a plain edge-list CSV, or a live OSM fetch via `osmnx`. |
 | `report.py` | (shared) | CLI: `critical-roads` and `festival-risk` subcommands. |
@@ -34,6 +34,12 @@ traffic simulation this MVP doesn't build.
 Variable #1 (U-turn placement) isn't implemented yet — see the Roadmap section of
 `docs/RESEARCH.md` for why (it needs a calibrated volume/simulation model, e.g. SUMO,
 not a heuristic) and what the next step looks like.
+
+`docs/google-map.html`'s Report ▸ Recommendations tab is the synthesized, city-wide
+view of all of the above: every sample landmark ranked by predicted severity, tagged
+with a proximity conflict where one applies, and given a kind-specific (or
+conflict-specific) suggested next step — separate from the Turn Shift Recommendations
+tab, which is specifically about turning-movement/median-relocation triage.
 
 ## Setup
 

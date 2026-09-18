@@ -104,33 +104,49 @@ which needs calibrated demand data this tool doesn't yet have — see Roadmap be
 ## 4. Other variables worth adding as the tool grows
 
 Turned up during research or by extension of the same logic, roughly in order of how
-cheaply they slot into the existing data model:
+cheaply they slot into the existing data model. The first three below are now
+implemented (as landmark kinds `it_park`, `school`, `truck_corridor`, plus a new
+`parking_zone` kind covering saturated commercial/market areas) — see
+`calendar_rules.WEEKLY_PEAK_DAYS`, `CONFLICT_KIND_PAIRS`, and
+`apply_proximity_escalation`, and the Report ▸ Recommendations tab in
+`docs/google-map.html`:
 
-- **IT park shift timings** — Whitefield, Electronic City, ORR tech corridors have
-  concentrated 9/10/11 AM and matching evening shift changes that dominate local
-  peak timing far more than a generic "rush hour" — a real `TimeOfDayProfile` should
-  be per-zone, not citywide.
-- **School/exam calendars** — board exam dates and school start/end times create
-  sharp, predictable local peaks (drop-off/pickup) similar in shape to the religious
-  weekly-peak model already built.
+- ~~**IT park shift timings**~~ — **implemented** as the `it_park` kind. Still
+  citywide-uniform per the placeholder `HOUR_PROFILES` shape below, not per-campus
+  real shift-timing data (Whitefield/Electronic City/ORR corridors almost certainly
+  differ from each other); replace with real per-campus timing if a company/park
+  ever shares it.
+- ~~**School/exam calendars**~~ — **implemented** as the `school` kind (recurring
+  weekday drop-off/pickup shape). Board-exam-specific date spikes are NOT modeled —
+  that would need a `Festival`-style one-off date list per school/board, same
+  mechanism as festivals, just not built yet.
 - **Wholesale market days** — KR Market and similar wholesale/mandi areas have their
-  own weekly heavy-vehicle patterns (early-morning loading), same rule-engine shape
-  as `WEEKLY_PEAK_DAYS`.
+  own weekly heavy-vehicle patterns (early-morning loading); the new `parking_zone`
+  kind models general commercial/market saturation but not this specific
+  early-morning wholesale-loading pattern — same rule-engine shape as
+  `WEEKLY_PEAK_DAYS`, just needs its own hourly profile.
 - **Monsoon waterlogging blackspots** — BBMP publishes known flooding-prone stretches
   each monsoon; these should raise a road's effective criticality tier during the
   monsoon months, since a flooded arterial has no fallback capacity.
 - **Metro (Namma Metro) construction phases** — an active construction corridor is
   effectively a long-duration, high-severity "festival" in this model's terms and
   can reuse the `Festival` mechanism instead of needing a new one.
-- **Freight/heavy-vehicle curfew hours** — Bengaluru already restricts heavy vehicle
-  entry to certain hours; this interacts directly with `workzone_scheduler`'s
-  allowed-hours logic and should be modeled as a citywide time constraint.
+- ~~**Freight/heavy-vehicle curfew hours**~~ — **implemented** as the `truck_corridor`
+  kind, with an illustrative night-entry `HOUR_PROFILES` shape. The actual permitted
+  hours (and whether they still match what's assumed here) should be verified
+  against current Bengaluru Traffic Police notifications before operational use —
+  restriction windows have changed historically and are not sourced from a live feed.
 - **Stadium/large-venue event calendars** (M. Chinnaswamy Stadium, Kanteerava
   Stadium) and **VIP movement advisories** — same one-off, date-scoped shape as
   `Festival`, just a different source list to maintain.
 - **Accident-hotspot data** — where available (Bengaluru Traffic Police publishes
   black-spot lists periodically), this is an independent signal from betweenness
   centrality and should be a second, additive criticality factor, not a replacement.
+- **Real turning-movement/volume counts at proximity-conflict points** — the new
+  `apply_proximity_escalation` (geographic distance + shared active day between two
+  different-kind landmarks, e.g. a school near a truck corridor) is a heuristic
+  stand-in for exactly this; it exists to flag WHERE such a count is worth doing,
+  same framing as the Turn Shift tab's U-turn/median-relocation triage.
 
 ## 5. Roadmap (explicitly out of scope for this MVP)
 
