@@ -1,0 +1,12 @@
+{
+  "name": "bengaluru-traffic-lab-webapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static server for the Bengaluru Traffic Lab sample visualizations",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

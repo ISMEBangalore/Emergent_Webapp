@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bengaluru Traffic Lab</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 640px; margin: 60px auto; padding: 0 20px; color: #0b0b0b;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.sub { color: #52514e; margin-top: 0; }
+  .links { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+  a.card {
+    display: block; padding: 16px 18px; border: 1px solid #e1e0d9; border-radius: 10px;
+    text-decoration: none; color: inherit;
+  }
+  a.card:hover { border-color: #2a78d6; }
+  a.card strong { display: block; font-size: 15px; margin-bottom: 4px; color: #2a78d6; }
+  a.card span { font-size: 13px; color: #52514e; }
+</style>
+</head>
+<body>
+  <h1>Bengaluru Traffic Lab</h1>
+  <p class="sub">Sample output from the traffic-zone analysis toolkit.</p>
+  <div class="links">
+    <a class="card" href="./sample-output.html">
+      <strong>Sample output (self-contained)</strong>
+      <span>Critical-roads diagram, 30-day festival-risk calendar, and a real-coordinate projection map. No API key needed.</span>
+    </a>
+    <a class="card" href="./google-map.html">
+      <strong>Google Maps view</strong>
+      <span>Same landmarks and risk calendar, rendered on an actual Google Map with a live traffic layer toggle.</span>
+    </a>
+  </div>
+</body>
+</html>
