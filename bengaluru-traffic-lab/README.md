@@ -52,6 +52,19 @@ lat/lon-projected map (with orientation reference points) that you can step thro
 day by day. It's generated from the same sample data in this directory — open it
 directly, no server needed.
 
+`docs/google-map.html` is the same 5 landmarks and 30-day risk calendar on an
+**actual Google Map** (real tiles, real streets, an optional live-traffic-layer
+toggle) instead of a projected graticule. It needs your own Google Maps API key
+(the file's top comment walks through getting one — Maps JavaScript API enabled,
+billing on, key restricted to your use) pasted into `GOOGLE_MAPS_API_KEY` near the
+top; without a key it just shows a setup banner instead of a map. This is
+deliberately a plain standalone file, not published anywhere — Google's Maps
+JavaScript API can't load inside a claude.ai Artifact's sandbox, only in a normal
+browser tab you open yourself. Google Maps here is presentation only: the
+criticality *analysis* still runs on OSM data (see `graph_io.py`), since Google's
+Maps Platform terms restrict caching/storing their data to build your own derived
+geographic dataset, which is exactly what that analysis does.
+
 ## Try it with the bundled sample data
 
 The `data/*.sample.*` files are illustrative only (a synthetic 8-node road network,
