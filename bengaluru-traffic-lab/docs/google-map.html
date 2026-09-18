@@ -174,10 +174,21 @@
   .hour-chip.low { background: #eef8ee; color: #0ca30c; }
 
   /* ---- Turn Shift Recommendations tab ---- */
-  #turnShiftView { flex-direction: column; overflow-y: auto; padding: 24px 32px; gap: 24px; max-width: 1150px; }
+  #turnShiftView { flex-direction: column; overflow-y: auto; padding: 24px 32px; gap: 24px; max-width: 1400px; }
   .warn-card {
     background: #fef3dc; border: 1px solid #f0d999; border-radius: 10px; padding: 14px 18px;
     font-size: 12.5px; color: #6b4e00; line-height: 1.55;
+  }
+  /* List on the left, maps + chart on the right, side by side so the maps
+     are visible without scrolling past the candidate list. Stacks on mobile. */
+  .ts-layout { display: flex; gap: 24px; align-items: flex-start; }
+  .ts-col-list { flex: 0 0 340px; max-width: 340px; position: sticky; top: 0; }
+  .ts-col-maps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
+  .ts-col-list .candidate-list { max-height: calc(100vh - 260px); overflow-y: auto; padding-right: 4px; }
+  @media (max-width: 900px) {
+    .ts-layout { flex-direction: column; }
+    .ts-col-list { flex: 1 1 auto; max-width: none; width: 100%; position: static; }
+    .ts-col-list .candidate-list { max-height: 320px; }
   }
   .candidate-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
   .candidate-row {
@@ -466,44 +477,49 @@
     job is to prioritize where that study's time goes, not to replace it.
   </div>
 
-  <div class="report-card">
-    <h2 style="margin:0 0 4px; font-size:14px;">Candidate locations for turning-movement changes</h2>
-    <p class="report-note" style="margin-top:2px;">
-      Locations currently at high/extreme predicted risk somewhere in the loaded window (same
-      condition as the Map tab's turning-movement advisory). Tick any to apply the illustrative
-      reduction below and compare.
-    </p>
-    <div class="candidate-list" id="candidateList"></div>
-  </div>
-
-  <div class="report-card">
-    <h2 style="margin:0 0 4px; font-size:14px;">Live traffic vs. suggested-change scenario</h2>
-    <p class="report-note" style="margin-top:2px;">
-      Left: Google's real live traffic, right now. Right: our own predicted layer only (Google traffic
-      can't be simulated for a hypothetical scenario) with any ticked locations' congestion intensity
-      reduced by the illustrative assumption above. Both reflect the day selected on the Map tab.
-    </p>
-    <div class="ts-maps">
-      <div class="ts-map-col">
-        <div class="ts-map-heading">Live traffic (real, now)</div>
-        <div class="ts-map-wrap"><div class="ts-map" id="tsBeforeMap"></div></div>
-        <p class="ts-map-caption">Google's actual current traffic conditions + our unmodified predicted-risk markers.</p>
-      </div>
-      <div class="ts-map-col">
-        <div class="ts-map-heading">With suggested changes <span class="hypothetical-badge">Hypothetical</span></div>
-        <div class="ts-map-wrap"><div class="ts-map" id="tsAfterMap"></div></div>
-        <p class="ts-map-caption">Our predicted-risk markers only, with ticked locations' intensity reduced by the illustrative assumption. Not Google data.</p>
+  <div class="ts-layout">
+    <div class="ts-col-list">
+      <div class="report-card">
+        <h2 style="margin:0 0 4px; font-size:14px;">Candidate locations</h2>
+        <p class="report-note" style="margin-top:2px;">
+          At high/extreme predicted risk somewhere in the loaded window (same condition as the Map
+          tab's turning-movement advisory). Tick any to apply the illustrative reduction and compare.
+        </p>
+        <div class="candidate-list" id="candidateList"></div>
       </div>
     </div>
-  </div>
 
-  <div class="report-card">
-    <h2 style="margin:0 0 4px; font-size:14px;">Predicted congestion change</h2>
-    <div class="compare-summary" id="compareSummary"></div>
-    <div id="compareRows"></div>
-    <div class="compare-legend">
-      <span><span class="swatch" style="background:var(--risk-extreme)"></span>Before</span>
-      <span><span class="swatch" style="background:#0ca30c"></span>After (hypothetical)</span>
+    <div class="ts-col-maps">
+      <div class="report-card">
+        <h2 style="margin:0 0 4px; font-size:14px;">Live traffic vs. suggested-change scenario</h2>
+        <p class="report-note" style="margin-top:2px;">
+          Left: Google's real live traffic, right now. Right: our own predicted layer only (Google
+          traffic can't be simulated for a hypothetical scenario) with ticked locations' congestion
+          intensity reduced by the illustrative assumption. Both reflect the day selected on the Map tab.
+        </p>
+        <div class="ts-maps">
+          <div class="ts-map-col">
+            <div class="ts-map-heading">Live traffic (real, now)</div>
+            <div class="ts-map-wrap"><div class="ts-map" id="tsBeforeMap"></div></div>
+            <p class="ts-map-caption">Google's actual current traffic conditions + our unmodified predicted-risk markers.</p>
+          </div>
+          <div class="ts-map-col">
+            <div class="ts-map-heading">With suggested changes <span class="hypothetical-badge">Hypothetical</span></div>
+            <div class="ts-map-wrap"><div class="ts-map" id="tsAfterMap"></div></div>
+            <p class="ts-map-caption">Our predicted-risk markers only, with ticked locations' intensity reduced by the illustrative assumption. Not Google data.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="report-card">
+        <h2 style="margin:0 0 4px; font-size:14px;">Predicted congestion change</h2>
+        <div class="compare-summary" id="compareSummary"></div>
+        <div id="compareRows"></div>
+        <div class="compare-legend">
+          <span><span class="swatch" style="background:var(--risk-extreme)"></span>Before</span>
+          <span><span class="swatch" style="background:#0ca30c"></span>After (hypothetical)</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
