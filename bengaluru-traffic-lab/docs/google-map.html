@@ -27,7 +27,7 @@
     flex-direction: column;
   }
   header {
-    padding: 14px 20px;
+    padding: 12px 20px;
     border-bottom: 1px solid var(--hairline);
     display: flex;
     flex-wrap: wrap;
@@ -46,28 +46,55 @@
   }
   .day-stepper button:hover { border-color: var(--accent); color: var(--accent); }
   .day-stepper button:disabled { opacity: 0.35; cursor: default; }
-  .day-label { min-width: 150px; text-align: center; font-variant-numeric: tabular-nums; }
+  .day-label { min-width: 165px; text-align: center; font-variant-numeric: tabular-nums; }
+  .day-label .is-today { color: var(--accent); font-weight: 600; }
   label.toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+
+  #layout { flex: 1; min-height: 0; display: flex; }
+  #sidebar {
+    width: 340px; flex-shrink: 0; border-right: 1px solid var(--hairline);
+    overflow-y: auto; display: flex; flex-direction: column; background: #fdfdfc;
+  }
+  .side-section { padding: 14px 16px; border-bottom: 1px solid var(--hairline); }
+  .side-section h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted);
+    margin: 0 0 10px;
+  }
+  .data-source-note { font-size: 12px; color: var(--ink-secondary); line-height: 1.5; margin: 6px 0 0; }
+  .data-source-note strong { color: var(--ink); }
+
+  #legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); flex-shrink: 0; }
+
+  .rank-row {
+    display: flex; flex-direction: column; gap: 6px; padding: 10px 8px; border-radius: 8px;
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .rank-row:hover { background: #f2f1ee; border-color: var(--hairline); }
+  .rank-row.is-selected { background: #eaf2fc; border-color: var(--accent); }
+  .rank-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .rank-name { font-size: 13px; font-weight: 600; }
+  .rank-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    padding: 2px 7px; border-radius: 999px; color: #fff; white-space: nowrap;
+  }
+  .rank-peak { font-size: 11.5px; color: var(--ink-secondary); }
+  .sparkline { display: flex; gap: 2px; }
+  .spark-cell { flex: 1; height: 14px; border-radius: 2px; position: relative; }
+  .spark-cell.is-today::after {
+    content: ""; position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%);
+    width: 4px; height: 4px; border-radius: 50%; background: var(--ink);
+  }
+  .spark-caption { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--ink-muted); margin-top: 2px; }
+
   #map { position: absolute; inset: 0; }
   #setup-banner {
     background: #fef3dc; border-bottom: 1px solid #f0d999; padding: 10px 20px;
     font-size: 13px; color: #6b4e00; display: none;
   }
   #setup-banner code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
-  #legend {
-    position: absolute; bottom: 20px; left: 20px; background: #fff; border: 1px solid var(--hairline);
-    border-radius: 8px; padding: 10px 14px; font-size: 12.5px; box-shadow: 0 2px 10px rgba(0,0,0,0.12);
-    display: flex; gap: 14px; z-index: 5;
-  }
-  .legend-item { display: flex; align-items: center; gap: 6px; }
-  .legend-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); }
   #map-wrap { position: relative; flex: 1; min-height: 0; }
-  #flagged-panel {
-    position: absolute; top: 16px; left: 16px; max-width: 320px; background: #fff;
-    border: 1px solid var(--hairline); border-radius: 8px; padding: 10px 14px;
-    font-size: 12.5px; color: var(--ink-secondary); box-shadow: 0 2px 10px rgba(0,0,0,0.12); z-index: 5;
-  }
-  #flagged-panel strong { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -107,11 +134,11 @@
 
 <header>
   <div>
-    <h1>Bengaluru Traffic Lab — sample landmarks on Google Maps</h1>
-    <p class="sub">Real tiles, real streets. Same 5 sample landmarks and 30-day risk calendar as the artifact version.</p>
+    <h1>Bengaluru Traffic Lab — congestion concern map</h1>
+    <p class="sub">Predicted recurring-congestion risk (left) vs. Google's live traffic conditions (map) for the 5 sample landmarks.</p>
   </div>
   <div class="controls">
-    <label class="toggle"><input type="checkbox" id="trafficToggle"> Live traffic layer</label>
+    <label class="toggle"><input type="checkbox" id="trafficToggle" checked> Live traffic layer</label>
     <div class="day-stepper">
       <button id="dayPrev" aria-label="Previous day">‹</button>
       <span class="day-label" id="dayLabel"></span>
@@ -125,14 +152,32 @@
   comment in the file source for the one line it needs), then reload this page.
 </div>
 
-<div id="map-wrap">
-  <div id="map"></div>
-  <div id="flagged-panel"></div>
-  <div id="legend">
-    <div class="legend-item"><span class="legend-swatch" style="background:#ebebe8"></span>None</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:var(--status-warning)"></span>Elevated</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:var(--status-serious)"></span>High</div>
-    <div class="legend-item"><span class="legend-swatch" style="background:var(--status-critical)"></span>Extreme</div>
+<div id="layout">
+  <aside id="sidebar">
+    <div class="side-section">
+      <h2>Legend</h2>
+      <div id="legend">
+        <div class="legend-item"><span class="legend-swatch" style="background:#ebebe8"></span>None</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--status-warning)"></span>Elevated</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--status-serious)"></span>High</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:var(--status-critical)"></span>Extreme</div>
+      </div>
+      <p class="data-source-note">
+        <strong>Left panel</strong> = our recurring-pattern prediction (weekly puja/prayer days + festival
+        calendar) — a forecast, computed with no live data.<br><br>
+        <strong>Map</strong> = Google's live traffic layer — actual conditions right now, with no memory
+        of past days or ability to predict future ones. They're independent signals; a road can be
+        predicted-quiet but live-jammed (accident, one-off event) or the reverse.
+      </p>
+    </div>
+    <div class="side-section" style="flex:1; overflow-y:auto;">
+      <h2>Concern ranking — past 4 / next 29 days</h2>
+      <div id="rankingList"></div>
+    </div>
+  </aside>
+
+  <div id="map-wrap">
+    <div id="map"></div>
   </div>
 </div>
 
@@ -153,47 +198,139 @@
   const LEVEL_LABEL = { none: "None", elevated: "Elevated", high: "High", extreme: "Extreme" };
 </script>
 <script type="application/json" id="risk-data">
-{"start": "2026-09-18", "days": 30, "landmarks": [{"name": "Bull Temple (Basavanagudi)", "cells": [{"date": "2026-09-18", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-09-19", "level": "none", "reasons": []}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Weekly peak day for temple_generic (Friday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-10-03", "level": "none", "reasons": []}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-10-10", "level": "none", "reasons": []}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-10-17", "level": "none", "reasons": []}]}, {"name": "Jumma Masjid (Bangalore City)", "cells": [{"date": "2026-09-18", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-09-19", "level": "none", "reasons": []}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Weekly peak day for masjid (Friday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-10-03", "level": "none", "reasons": []}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-10-10", "level": "none", "reasons": []}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-10-17", "level": "none", "reasons": []}]}, {"name": "Someshwara Temple (Ulsoor)", "cells": [{"date": "2026-09-18", "level": "none", "reasons": []}, {"date": "2026-09-19", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Weekly peak day for shani_temple (Saturday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "none", "reasons": []}, {"date": "2026-10-03", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "none", "reasons": []}, {"date": "2026-10-10", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "none", "reasons": []}, {"date": "2026-10-17", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}]}, {"name": "St. Mary's Basilica", "cells": [{"date": "2026-09-18", "level": "none", "reasons": []}, {"date": "2026-09-19", "level": "none", "reasons": []}, {"date": "2026-09-20", "level": "elevated", "reasons": ["Weekly peak day for church (Sunday)"]}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Weekly peak day for church (Sunday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "none", "reasons": []}, {"date": "2026-10-03", "level": "none", "reasons": []}, {"date": "2026-10-04", "level": "elevated", "reasons": ["Weekly peak day for church (Sunday)"]}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "none", "reasons": []}, {"date": "2026-10-10", "level": "none", "reasons": []}, {"date": "2026-10-11", "level": "elevated", "reasons": ["Weekly peak day for church (Sunday)"]}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "none", "reasons": []}, {"date": "2026-10-17", "level": "none", "reasons": []}]}, {"name": "Sri Prasanna Anjaneya Temple (illustrative)", "cells": [{"date": "2026-09-18", "level": "none", "reasons": []}, {"date": "2026-09-19", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Weekly peak day for hanuman_temple (Saturday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme)"]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "none", "reasons": []}, {"date": "2026-10-03", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "none", "reasons": []}, {"date": "2026-10-10", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "none", "reasons": []}, {"date": "2026-10-17", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}]}]}
+{"start": "2026-09-14","today": "2026-09-18","todayIndex": 4,"days": 34,"landmarks": [{"name": "Bull Temple (Basavanagudi)","cells": [{"date": "2026-09-14","level": "none","reasons": []},{"date": "2026-09-15","level": "none","reasons": []},{"date": "2026-09-16","level": "none","reasons": []},{"date": "2026-09-17","level": "none","reasons": []},{"date": "2026-09-18","level": "elevated","reasons": ["Weekly peak day for temple_generic (Friday)"]},{"date": "2026-09-19","level": "none","reasons": []},{"date": "2026-09-20","level": "none","reasons": []},{"date": "2026-09-21","level": "none","reasons": []},{"date": "2026-09-22","level": "none","reasons": []},{"date": "2026-09-23","level": "none","reasons": []},{"date": "2026-09-24","level": "none","reasons": []},{"date": "2026-09-25","level": "extreme","reasons": ["Weekly peak day for temple_generic (Friday)","Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-26","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-27","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-28","level": "none","reasons": []},{"date": "2026-09-29","level": "none","reasons": []},{"date": "2026-09-30","level": "none","reasons": []},{"date": "2026-10-01","level": "none","reasons": []},{"date": "2026-10-02","level": "elevated","reasons": ["Weekly peak day for temple_generic (Friday)"]},{"date": "2026-10-03","level": "none","reasons": []},{"date": "2026-10-04","level": "none","reasons": []},{"date": "2026-10-05","level": "none","reasons": []},{"date": "2026-10-06","level": "none","reasons": []},{"date": "2026-10-07","level": "none","reasons": []},{"date": "2026-10-08","level": "none","reasons": []},{"date": "2026-10-09","level": "elevated","reasons": ["Weekly peak day for temple_generic (Friday)"]},{"date": "2026-10-10","level": "none","reasons": []},{"date": "2026-10-11","level": "none","reasons": []},{"date": "2026-10-12","level": "none","reasons": []},{"date": "2026-10-13","level": "none","reasons": []},{"date": "2026-10-14","level": "none","reasons": []},{"date": "2026-10-15","level": "none","reasons": []},{"date": "2026-10-16","level": "elevated","reasons": ["Weekly peak day for temple_generic (Friday)"]},{"date": "2026-10-17","level": "none","reasons": []}]},{"name": "Jumma Masjid (Bangalore City)","cells": [{"date": "2026-09-14","level": "none","reasons": []},{"date": "2026-09-15","level": "none","reasons": []},{"date": "2026-09-16","level": "none","reasons": []},{"date": "2026-09-17","level": "none","reasons": []},{"date": "2026-09-18","level": "elevated","reasons": ["Weekly peak day for masjid (Friday)"]},{"date": "2026-09-19","level": "none","reasons": []},{"date": "2026-09-20","level": "none","reasons": []},{"date": "2026-09-21","level": "none","reasons": []},{"date": "2026-09-22","level": "none","reasons": []},{"date": "2026-09-23","level": "none","reasons": []},{"date": "2026-09-24","level": "none","reasons": []},{"date": "2026-09-25","level": "extreme","reasons": ["Weekly peak day for masjid (Friday)","Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-26","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-27","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-28","level": "none","reasons": []},{"date": "2026-09-29","level": "none","reasons": []},{"date": "2026-09-30","level": "none","reasons": []},{"date": "2026-10-01","level": "none","reasons": []},{"date": "2026-10-02","level": "elevated","reasons": ["Weekly peak day for masjid (Friday)"]},{"date": "2026-10-03","level": "none","reasons": []},{"date": "2026-10-04","level": "none","reasons": []},{"date": "2026-10-05","level": "none","reasons": []},{"date": "2026-10-06","level": "none","reasons": []},{"date": "2026-10-07","level": "none","reasons": []},{"date": "2026-10-08","level": "none","reasons": []},{"date": "2026-10-09","level": "elevated","reasons": ["Weekly peak day for masjid (Friday)"]},{"date": "2026-10-10","level": "none","reasons": []},{"date": "2026-10-11","level": "none","reasons": []},{"date": "2026-10-12","level": "none","reasons": []},{"date": "2026-10-13","level": "none","reasons": []},{"date": "2026-10-14","level": "none","reasons": []},{"date": "2026-10-15","level": "none","reasons": []},{"date": "2026-10-16","level": "elevated","reasons": ["Weekly peak day for masjid (Friday)"]},{"date": "2026-10-17","level": "none","reasons": []}]},{"name": "Someshwara Temple (Ulsoor)","cells": [{"date": "2026-09-14","level": "none","reasons": []},{"date": "2026-09-15","level": "none","reasons": []},{"date": "2026-09-16","level": "none","reasons": []},{"date": "2026-09-17","level": "none","reasons": []},{"date": "2026-09-18","level": "none","reasons": []},{"date": "2026-09-19","level": "elevated","reasons": ["Weekly peak day for shani_temple (Saturday)"]},{"date": "2026-09-20","level": "none","reasons": []},{"date": "2026-09-21","level": "none","reasons": []},{"date": "2026-09-22","level": "none","reasons": []},{"date": "2026-09-23","level": "none","reasons": []},{"date": "2026-09-24","level": "none","reasons": []},{"date": "2026-09-25","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-26","level": "extreme","reasons": ["Weekly peak day for shani_temple (Saturday)","Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-27","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-28","level": "none","reasons": []},{"date": "2026-09-29","level": "none","reasons": []},{"date": "2026-09-30","level": "none","reasons": []},{"date": "2026-10-01","level": "none","reasons": []},{"date": "2026-10-02","level": "none","reasons": []},{"date": "2026-10-03","level": "elevated","reasons": ["Weekly peak day for shani_temple (Saturday)"]},{"date": "2026-10-04","level": "none","reasons": []},{"date": "2026-10-05","level": "none","reasons": []},{"date": "2026-10-06","level": "none","reasons": []},{"date": "2026-10-07","level": "none","reasons": []},{"date": "2026-10-08","level": "none","reasons": []},{"date": "2026-10-09","level": "none","reasons": []},{"date": "2026-10-10","level": "elevated","reasons": ["Weekly peak day for shani_temple (Saturday)"]},{"date": "2026-10-11","level": "none","reasons": []},{"date": "2026-10-12","level": "none","reasons": []},{"date": "2026-10-13","level": "none","reasons": []},{"date": "2026-10-14","level": "none","reasons": []},{"date": "2026-10-15","level": "none","reasons": []},{"date": "2026-10-16","level": "none","reasons": []},{"date": "2026-10-17","level": "elevated","reasons": ["Weekly peak day for shani_temple (Saturday)"]}]},{"name": "St. Mary's Basilica","cells": [{"date": "2026-09-14","level": "none","reasons": []},{"date": "2026-09-15","level": "none","reasons": []},{"date": "2026-09-16","level": "none","reasons": []},{"date": "2026-09-17","level": "none","reasons": []},{"date": "2026-09-18","level": "none","reasons": []},{"date": "2026-09-19","level": "none","reasons": []},{"date": "2026-09-20","level": "elevated","reasons": ["Weekly peak day for church (Sunday)"]},{"date": "2026-09-21","level": "none","reasons": []},{"date": "2026-09-22","level": "none","reasons": []},{"date": "2026-09-23","level": "none","reasons": []},{"date": "2026-09-24","level": "none","reasons": []},{"date": "2026-09-25","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-26","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-27","level": "extreme","reasons": ["Weekly peak day for church (Sunday)","Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-28","level": "none","reasons": []},{"date": "2026-09-29","level": "none","reasons": []},{"date": "2026-09-30","level": "none","reasons": []},{"date": "2026-10-01","level": "none","reasons": []},{"date": "2026-10-02","level": "none","reasons": []},{"date": "2026-10-03","level": "none","reasons": []},{"date": "2026-10-04","level": "elevated","reasons": ["Weekly peak day for church (Sunday)"]},{"date": "2026-10-05","level": "none","reasons": []},{"date": "2026-10-06","level": "none","reasons": []},{"date": "2026-10-07","level": "none","reasons": []},{"date": "2026-10-08","level": "none","reasons": []},{"date": "2026-10-09","level": "none","reasons": []},{"date": "2026-10-10","level": "none","reasons": []},{"date": "2026-10-11","level": "elevated","reasons": ["Weekly peak day for church (Sunday)"]},{"date": "2026-10-12","level": "none","reasons": []},{"date": "2026-10-13","level": "none","reasons": []},{"date": "2026-10-14","level": "none","reasons": []},{"date": "2026-10-15","level": "none","reasons": []},{"date": "2026-10-16","level": "none","reasons": []},{"date": "2026-10-17","level": "none","reasons": []}]},{"name": "Sri Prasanna Anjaneya Temple (illustrative)","cells": [{"date": "2026-09-14","level": "none","reasons": []},{"date": "2026-09-15","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]},{"date": "2026-09-16","level": "none","reasons": []},{"date": "2026-09-17","level": "none","reasons": []},{"date": "2026-09-18","level": "none","reasons": []},{"date": "2026-09-19","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Saturday)"]},{"date": "2026-09-20","level": "none","reasons": []},{"date": "2026-09-21","level": "none","reasons": []},{"date": "2026-09-22","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]},{"date": "2026-09-23","level": "none","reasons": []},{"date": "2026-09-24","level": "none","reasons": []},{"date": "2026-09-25","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-26","level": "extreme","reasons": ["Weekly peak day for hanuman_temple (Saturday)","Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-27","level": "extreme","reasons": ["Ganesh Chaturthi immersion (visarjan) \u2014 EXAMPLE DATE, VERIFY (extreme) \u2014 Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]},{"date": "2026-09-28","level": "none","reasons": []},{"date": "2026-09-29","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]},{"date": "2026-09-30","level": "none","reasons": []},{"date": "2026-10-01","level": "none","reasons": []},{"date": "2026-10-02","level": "none","reasons": []},{"date": "2026-10-03","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Saturday)"]},{"date": "2026-10-04","level": "none","reasons": []},{"date": "2026-10-05","level": "none","reasons": []},{"date": "2026-10-06","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]},{"date": "2026-10-07","level": "none","reasons": []},{"date": "2026-10-08","level": "none","reasons": []},{"date": "2026-10-09","level": "none","reasons": []},{"date": "2026-10-10","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Saturday)"]},{"date": "2026-10-11","level": "none","reasons": []},{"date": "2026-10-12","level": "none","reasons": []},{"date": "2026-10-13","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]},{"date": "2026-10-14","level": "none","reasons": []},{"date": "2026-10-15","level": "none","reasons": []},{"date": "2026-10-16","level": "none","reasons": []},{"date": "2026-10-17","level": "elevated","reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}]}]}
 </script>
 
 <script>
   const RISK = JSON.parse(document.getElementById("risk-data").textContent);
   const DATES = RISK.landmarks[0].cells.map(c => c.date);
-  let dayIndex = 0;
+  const TODAY_INDEX = RISK.todayIndex;
+  let dayIndex = TODAY_INDEX;
+  let selectedLandmark = null;
+
+  const LEVEL_RANK = { none: 0, elevated: 1, high: 2, extreme: 3 };
+  const MARKER_SCALE = { none: 7, elevated: 10, high: 13, extreme: 17 };
 
   let map, trafficLayer;
   const markers = [];   // { marker, circle, landmark }
-  const infoWindow = () => window.__infoWindow;
 
   function cellFor(landmarkName, idx) {
     const row = RISK.landmarks.find(l => l.name === landmarkName);
     return row.cells[idx];
   }
 
+  // Scans the whole loaded window (past + future) for a landmark and finds
+  // its worst risk level, plus the contiguous date range around the
+  // occurrence closest to today — this is what makes the sidebar answer
+  // "which areas need attention soon", not just "what does today look like".
+  function peakInfo(landmarkName) {
+    const row = RISK.landmarks.find(l => l.name === landmarkName);
+    let bestRank = -1;
+    let anchorIdx = 0;
+    row.cells.forEach((cell, idx) => {
+      const rank = LEVEL_RANK[cell.level];
+      if (rank > bestRank || (rank === bestRank && Math.abs(idx - TODAY_INDEX) < Math.abs(anchorIdx - TODAY_INDEX))) {
+        bestRank = rank;
+        anchorIdx = idx;
+      }
+    });
+    const level = row.cells[anchorIdx].level;
+    let rangeStart = anchorIdx, rangeEnd = anchorIdx;
+    while (rangeStart > 0 && row.cells[rangeStart - 1].level === level) rangeStart--;
+    while (rangeEnd < row.cells.length - 1 && row.cells[rangeEnd + 1].level === level) rangeEnd++;
+    const flaggedDays = row.cells.filter((c) => LEVEL_RANK[c.level] >= 1).length;
+    return { level, rank: bestRank, rangeStart, rangeEnd, reasons: row.cells[anchorIdx].reasons, flaggedDays };
+  }
+
+  function formatDateShort(dateStr) {
+    return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function renderRanking() {
+    const list = document.getElementById("rankingList");
+    list.innerHTML = "";
+    const ranked = LANDMARKS.map((landmark) => ({ landmark, peak: peakInfo(landmark.name) }))
+      .sort((a, b) =>
+        (b.peak.rank - a.peak.rank) ||
+        (b.peak.flaggedDays - a.peak.flaggedDays) ||
+        (Math.abs(a.peak.rangeStart - TODAY_INDEX) - Math.abs(b.peak.rangeStart - TODAY_INDEX))
+      );
+
+    ranked.forEach(({ landmark, peak }) => {
+      const row = document.createElement("div");
+      row.className = "rank-row" + (selectedLandmark === landmark.name ? " is-selected" : "");
+
+      const dateLabel = peak.rangeStart === peak.rangeEnd
+        ? formatDateShort(DATES[peak.rangeStart])
+        : `${formatDateShort(DATES[peak.rangeStart])}–${formatDateShort(DATES[peak.rangeEnd])}`;
+      const when = peak.rangeEnd < TODAY_INDEX ? "past" : (peak.rangeStart > TODAY_INDEX ? "upcoming" : "now");
+
+      const top = document.createElement("div");
+      top.className = "rank-row-top";
+      top.innerHTML = `<span class="rank-name">${landmark.name.replace(/ \(.*\)$/, "")}</span>` +
+        `<span class="rank-badge" style="background:${LEVEL_COLOR[peak.level] === "#ebebe8" ? "#b8b7b1" : LEVEL_COLOR[peak.level]}">${LEVEL_LABEL[peak.level]}</span>`;
+      row.appendChild(top);
+
+      const peakLine = document.createElement("div");
+      peakLine.className = "rank-peak";
+      peakLine.textContent = peak.level === "none"
+        ? "No elevated risk in this window"
+        : `Peak: ${dateLabel} (${when}) · ${peak.flaggedDays} flagged day${peak.flaggedDays === 1 ? "" : "s"} in window`;
+      row.appendChild(peakLine);
+
+      const spark = document.createElement("div");
+      spark.className = "sparkline";
+      const cells = RISK.landmarks.find(l => l.name === landmark.name).cells;
+      cells.forEach((cell, idx) => {
+        const cellEl = document.createElement("div");
+        cellEl.className = "spark-cell" + (idx === TODAY_INDEX ? " is-today" : "");
+        cellEl.style.background = LEVEL_COLOR[cell.level];
+        cellEl.title = `${DATES[idx]}: ${LEVEL_LABEL[cell.level]}`;
+        spark.appendChild(cellEl);
+      });
+      row.appendChild(spark);
+
+      const caption = document.createElement("div");
+      caption.className = "spark-caption";
+      caption.innerHTML = `<span>${formatDateShort(DATES[0])}</span><span>today</span><span>${formatDateShort(DATES[DATES.length - 1])}</span>`;
+      row.appendChild(caption);
+
+      row.addEventListener("click", () => {
+        selectedLandmark = landmark.name;
+        if (map) {
+          map.panTo({ lat: landmark.lat, lng: landmark.lon });
+          map.setZoom(15);
+          const entry = markers.find(m => m.landmark.name === landmark.name);
+          if (entry) google.maps.event.trigger(entry.marker, "click");
+        }
+        renderRanking();
+      });
+
+      list.appendChild(row);
+    });
+  }
+
   function render() {
-    const flagged = [];
     markers.forEach(({ marker, circle, landmark }) => {
       const cell = cellFor(landmark.name, dayIndex);
       const color = LEVEL_COLOR[cell.level];
+      const scale = MARKER_SCALE[cell.level];
       marker.setIcon({
         path: google.maps.SymbolPath.CIRCLE,
-        scale: 9,
+        scale,
         fillColor: cell.level === "none" ? "#ffffff" : color,
         fillOpacity: 1,
         strokeColor: color,
-        strokeWeight: 2
+        strokeWeight: cell.level === "extreme" ? 3 : 2
       });
-      circle.setOptions({ fillColor: color, fillOpacity: cell.level === "none" ? 0.04 : 0.14, strokeColor: color, strokeOpacity: cell.level === "none" ? 0.15 : 0.5 });
+      circle.setOptions({ fillColor: color, fillOpacity: cell.level === "none" ? 0.04 : 0.16, strokeColor: color, strokeOpacity: cell.level === "none" ? 0.15 : 0.55 });
       marker.__cell = cell;
-      if (cell.level !== "none") flagged.push(`${landmark.name.replace(/ \(.*\)$/, "")} (${LEVEL_LABEL[cell.level]})`);
     });
 
     const d = new Date(DATES[dayIndex] + "T00:00:00");
-    document.getElementById("dayLabel").textContent =
-      DATES[dayIndex] + " · " + d.toLocaleDateString("en-US", { weekday: "long" });
-    document.getElementById("flagged-panel").innerHTML = flagged.length
-      ? "<strong>Flagged today:</strong><br>" + flagged.join("<br>")
-      : "<em>Nothing flagged for this date.</em>";
+    const todaySuffix = dayIndex === TODAY_INDEX ? " <span class=\"is-today\">(today)</span>" : "";
+    document.getElementById("dayLabel").innerHTML =
+      DATES[dayIndex] + " · " + d.toLocaleDateString("en-US", { weekday: "long" }) + todaySuffix;
     document.getElementById("dayPrev").disabled = dayIndex === 0;
     document.getElementById("dayNext").disabled = dayIndex === DATES.length - 1;
   }
@@ -208,6 +345,7 @@
     window.__infoWindow = new google.maps.InfoWindow();
 
     trafficLayer = new google.maps.TrafficLayer();
+    trafficLayer.setMap(map); // on by default — see the "live traffic layer" checkbox
     document.getElementById("trafficToggle").addEventListener("change", (e) => {
       trafficLayer.setMap(e.target.checked ? map : null);
     });
@@ -226,18 +364,25 @@
       });
 
       marker.addListener("click", () => {
+        selectedLandmark = landmark.name;
         const cell = marker.__cell;
+        const peak = peakInfo(landmark.name);
         const reasons = cell.reasons.length
           ? "<ul style='margin:6px 0 0;padding-left:18px;'>" + cell.reasons.map(r => `<li>${r}</li>`).join("") + "</ul>"
+          : "<div style='color:#898781;margin-top:4px;'>No specific trigger for this date.</div>";
+        const peakNote = peak.level !== "none"
+          ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e1e0d9;color:#52514e;">Window peak: <strong>${LEVEL_LABEL[peak.level]}</strong> around ${formatDateShort(DATES[peak.rangeStart])}</div>`
           : "";
         window.__infoWindow.setContent(
-          `<div style="font:13px system-ui;max-width:240px;">
+          `<div style="font:13px system-ui;max-width:260px;">
              <strong>${landmark.name}</strong><br>
              ${DATES[dayIndex]} — ${LEVEL_LABEL[cell.level]} risk
              ${reasons}
+             ${peakNote}
            </div>`
         );
         window.__infoWindow.open(map, marker);
+        renderRanking();
       });
 
       markers.push({ marker, circle, landmark });
@@ -249,7 +394,8 @@
   document.getElementById("dayPrev").addEventListener("click", () => { if (dayIndex > 0) { dayIndex--; render(); } });
   document.getElementById("dayNext").addEventListener("click", () => { if (dayIndex < DATES.length - 1) { dayIndex++; render(); } });
 
-  render(); // populate the day label immediately, even before the map (and its markers) loads
+  render();        // populate the day label immediately, even before the map (and its markers) loads
+  renderRanking();  // the sidebar doesn't depend on the map being loaded at all
 
   if (!GOOGLE_MAPS_API_KEY) {
     document.getElementById("setup-banner").style.display = "block";
