@@ -87,13 +87,22 @@
      to "HTTP referrers" and add the path you'll open this file from (or
      "None" while testing locally — just don't publish that unrestricted key
      anywhere public).
-  5. Paste the key into GOOGLE_MAPS_API_KEY below and open this file in a
-     browser (double-click it, or `python3 -m http.server` and visit it —
-     either works, this page has no server-side component).
+  5. DO NOT paste your key into this file directly — it's tracked by git and
+     would end up committed to the repo's history. Instead, create a sibling
+     file next to this one called `google-map-key.local.js` (already in
+     .gitignore, so it will never be committed) containing exactly:
+
+       window.GOOGLE_MAPS_API_KEY = "your-real-key-here";
+
+     Then open this HTML file in a browser (double-click it, or
+     `python3 -m http.server` and visit it — either works, this page has no
+     server-side component). Without that local file present, this page
+     shows a setup banner instead of a map.
   ============================================================================
 -->
+<script src="./google-map-key.local.js" onerror="window.__noLocalKeyFile = true"></script>
 <script>
-  const GOOGLE_MAPS_API_KEY = "YOUR_API_KEY_HERE";
+  const GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || "";
 </script>
 
 <header>
@@ -112,8 +121,8 @@
 </header>
 
 <div id="setup-banner">
-  No API key set yet — replace <code>YOUR_API_KEY_HERE</code> near the top of this HTML file with
-  your own Google Maps API key (see the setup comment in the file source), then reload this page.
+  No API key found — create <code>google-map-key.local.js</code> next to this file (see the setup
+  comment in the file source for the one line it needs), then reload this page.
 </div>
 
 <div id="map-wrap">
@@ -242,7 +251,7 @@
 
   render(); // populate the day label immediately, even before the map (and its markers) loads
 
-  if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_API_KEY_HERE") {
+  if (!GOOGLE_MAPS_API_KEY) {
     document.getElementById("setup-banner").style.display = "block";
   } else {
     const script = document.createElement("script");

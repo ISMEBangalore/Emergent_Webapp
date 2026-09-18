@@ -95,3 +95,6 @@ frontend/node_modules/.cache/default-development/8.pack
 credentials.json
 *.key
 .credentials
+
+# Local-only secrets (never commit real API keys)
+bengaluru-traffic-lab/docs/google-map-key.local.js
