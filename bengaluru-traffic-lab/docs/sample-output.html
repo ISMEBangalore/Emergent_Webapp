@@ -1,0 +1,833 @@
+<title>Traffic Lab Findings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --surface-page:   #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #ffffff;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --hairline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --accent:         #2a78d6;
+    --accent-dark:    #104281;
+    --seq-100:        #cde2fb;
+    --seq-650:        #104281;
+    --status-good:      #0ca30c;
+    --status-warning:   #fab219;
+    --status-serious:   #ec835a;
+    --status-critical:  #d03b3b;
+    --status-good-bg:      #e6f6e6;
+    --status-warning-bg:   #fef3dc;
+    --status-serious-bg:   #fbe6dd;
+    --status-critical-bg:  #fadedd;
+    --status-none-bg:      #ebebe8;
+    --status-none-fg:      #898781;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface-page:   #0d0d0d;
+      --surface-1:      #1a1a19;
+      --surface-2:      #212120;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --hairline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --accent:         #3987e5;
+      --accent-dark:    #86b6ef;
+      --seq-100:        #184f95;
+      --seq-650:        #cde2fb;
+      --status-good:      #0ca30c;
+      --status-warning:   #fab219;
+      --status-serious:   #ec835a;
+      --status-critical:  #e66767;
+      --status-good-bg:      #163017;
+      --status-warning-bg:   #3a2f10;
+      --status-serious-bg:   #3a241a;
+      --status-critical-bg:  #3a1a1a;
+      --status-none-bg:      #2c2c2a;
+      --status-none-fg:      #898781;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface-page:   #0d0d0d;
+    --surface-1:      #1a1a19;
+    --surface-2:      #212120;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --hairline:       #2c2c2a;
+    --border:         rgba(255,255,255,0.10);
+    --accent:         #3987e5;
+    --accent-dark:    #86b6ef;
+    --seq-100:        #184f95;
+    --seq-650:        #cde2fb;
+    --status-good:      #0ca30c;
+    --status-warning:   #fab219;
+    --status-serious:   #ec835a;
+    --status-critical:  #e66767;
+    --status-good-bg:      #163017;
+    --status-warning-bg:   #3a2f10;
+    --status-serious-bg:   #3a241a;
+    --status-critical-bg:  #3a1a1a;
+    --status-none-bg:      #2c2c2a;
+    --status-none-fg:      #898781;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface-page);
+    color: var(--text-primary);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding-inline: 20px;
+    padding-block: max(28px, env(safe-area-inset-top, 0px)) 48px;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace; }
+  .wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  header.page-head { display: flex; flex-direction: column; gap: 8px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 { font-size: clamp(24px, 4vw, 32px); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .subhead { color: var(--text-secondary); font-size: 15px; line-height: 1.55; max-width: 62ch; margin: 0; }
+  .provenance {
+    font-size: 12.5px; color: var(--text-muted); border-left: 2px solid var(--hairline);
+    padding-left: 10px; line-height: 1.5; max-width: 62ch;
+  }
+  .provenance code { font-family: "IBM Plex Mono", monospace; font-size: 12px; background: var(--surface-1); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border); }
+
+  section.card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px clamp(16px, 3vw, 28px) 26px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .card-head { display: flex; flex-direction: column; gap: 4px; }
+  .card-title { font-size: 17px; font-weight: 600; margin: 0; }
+  .card-note { font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+  .var-tag {
+    display: inline-flex; align-items: center; gap: 5px; font-family: "IBM Plex Mono", monospace;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-radius: 999px; padding: 3px 9px; width: fit-content;
+  }
+
+  .network-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+  @media (max-width: 720px) { .network-layout { grid-template-columns: 1fr; } }
+
+  .diagram-frame { background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 10px; padding: 10px; }
+  svg.netviz { display: block; width: 100%; height: auto; }
+  .netviz text { font-family: "IBM Plex Mono", monospace; fill: var(--text-primary); }
+  .netviz .node-label { font-size: 13px; font-weight: 600; }
+  .netviz .edge-label { font-size: 10px; fill: var(--text-secondary); }
+  .netviz .node-dot { fill: var(--surface-1); stroke: var(--text-primary); stroke-width: 2; }
+  .netviz .callout { font-family: "IBM Plex Sans", sans-serif; font-size: 11.5px; fill: var(--status-critical); font-weight: 600; }
+
+  .ramp-legend { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); }
+  .ramp-legend .bar { flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--seq-100), var(--seq-650)); max-width: 160px; }
+
+  .rank-list { display: flex; flex-direction: column; gap: 7px; }
+  .rank-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; }
+  .rank-index { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--text-muted); text-align: right; }
+  .rank-bar-track { position: relative; height: 26px; background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 6px; overflow: hidden; }
+  .rank-bar-fill { position: absolute; inset: 0; width: 0%; border-radius: 5px 0 0 5px; }
+  .rank-bar-text {
+    position: relative; z-index: 1; height: 100%; display: flex; align-items: center; justify-content: space-between;
+    padding-inline: 9px; font-size: 12.5px; font-weight: 500; gap: 8px;
+  }
+  .rank-score { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+  .critical-pill {
+    display: inline-flex; align-items: center; gap: 4px; font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+    color: var(--status-critical); background: var(--status-critical-bg);
+    border-radius: 999px; padding: 2px 7px; white-space: nowrap;
+  }
+
+  .heatmap-scroll { overflow-x: auto; padding-bottom: 4px; }
+  table.heatmap { border-collapse: separate; border-spacing: 3px; }
+  table.heatmap th { font-weight: 500; }
+  .hm-corner { width: 210px; }
+  .hm-month {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--text-muted);
+    text-align: left; padding-left: 2px; letter-spacing: 0.03em;
+  }
+  .hm-day {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--text-muted);
+    font-weight: 400; width: 22px; text-align: center; padding-bottom: 2px;
+  }
+  .hm-day.is-weekend { color: var(--accent); }
+  .hm-rowlabel {
+    text-align: left; font-size: 12.5px; font-weight: 500; padding-right: 10px;
+    white-space: normal; max-width: 200px; line-height: 1.3;
+  }
+  .hm-kind { display: block; font-size: 10.5px; color: var(--text-muted); font-weight: 400; }
+  td.hm-cell {
+    width: 22px; height: 22px; border-radius: 4px; cursor: default;
+    border: 1px solid var(--border);
+  }
+  td.hm-cell:focus-visible, td.hm-cell:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hm-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .hm-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .hm-swatch { width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--border); flex-shrink: 0; }
+
+  #tooltip {
+    position: fixed; z-index: 50; pointer-events: none; max-width: 260px;
+    background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; line-height: 1.45; border-radius: 8px; padding: 9px 11px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25); opacity: 0; transform: translateY(4px);
+    transition: opacity 0.1s ease, transform 0.1s ease;
+  }
+  #tooltip.visible { opacity: 1; transform: translateY(0); }
+  #tooltip .tt-title { font-weight: 600; margin-bottom: 3px; }
+  #tooltip ul { margin: 4px 0 0; padding-left: 16px; }
+
+  details.table-toggle { font-size: 13px; }
+  details.table-toggle > summary {
+    cursor: pointer; color: var(--accent); font-weight: 500; list-style: none;
+    display: inline-flex; align-items: center; gap: 5px; user-select: none;
+  }
+  details.table-toggle > summary::-webkit-details-marker { display: none; }
+  details.table-toggle > summary::before { content: "▸"; font-size: 10px; transition: transform 0.15s ease; }
+  details.table-toggle[open] > summary::before { transform: rotate(90deg); }
+  .plain-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12.5px; }
+  .plain-table th, .plain-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hairline); }
+  .plain-table th { color: var(--text-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .plain-table td.num { font-family: "IBM Plex Mono", monospace; }
+  .overflow-x { overflow-x: auto; }
+
+  .geo-controls { display: flex; align-items: center; gap: 12px; }
+  .geo-btn {
+    width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--hairline);
+    background: var(--surface-2); color: var(--text-primary); font-size: 16px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .geo-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .geo-btn:disabled { opacity: 0.35; cursor: default; }
+  .geo-date { font-size: 13px; font-weight: 500; min-width: 190px; text-align: center; }
+  .geo-date .geo-weekday { color: var(--text-muted); font-weight: 400; }
+  svg.geomap { display: block; width: 100%; height: auto; }
+  svg.geomap text { font-family: "IBM Plex Mono", monospace; fill: var(--text-muted); }
+  svg.geomap .grat-line { stroke: var(--hairline); stroke-width: 1; }
+  svg.geomap .grat-label { font-size: 9px; }
+  svg.geomap .ref-dot { fill: var(--surface-2); stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 2 2; }
+  svg.geomap .ref-label { font-size: 10px; fill: var(--text-muted); font-style: italic; }
+  svg.geomap .lm-label { font-family: "IBM Plex Sans", sans-serif; font-size: 11.5px; font-weight: 600; fill: var(--text-primary); }
+  svg.geomap .lm-dot { stroke-width: 2; cursor: pointer; }
+  svg.geomap .scale-text { font-size: 10px; }
+  svg.geomap .compass-text { font-size: 12px; font-weight: 600; fill: var(--text-secondary); }
+  .geo-flagged {
+    font-size: 13px; color: var(--text-secondary); background: var(--surface-2);
+    border: 1px solid var(--hairline); border-radius: 8px; padding: 10px 14px; margin: 0;
+    line-height: 1.6;
+  }
+  .geo-flagged strong { color: var(--text-primary); }
+  .geo-flagged .none-flagged { color: var(--text-muted); font-style: italic; }
+
+  footer.page-foot {
+    font-size: 12.5px; color: var(--text-muted); border-top: 1px solid var(--hairline);
+    padding-top: 16px; line-height: 1.6;
+  }
+  footer.page-foot code { font-family: "IBM Plex Mono", monospace; background: var(--surface-1); padding: 1px 4px; border-radius: 3px; }
+</style>
+
+<div class="wrap">
+
+  <header class="page-head">
+    <span class="eyebrow">Bengaluru Traffic Lab · sample output</span>
+    <h1>What the analysis toolkit actually produces</h1>
+    <p class="subhead">
+      Two views generated by the CLI added to <code class="mono">bengaluru-traffic-lab/</code>:
+      which roads matter most to the network, and which weekly/festival days push
+      congestion up near a tagged religious site. Both are computed straight from the
+      sample data shipped in the repo — nothing here is hand-drawn.
+    </p>
+    <p class="provenance">
+      Generated by <code>traffic_lab.report critical-roads</code> and
+      <code>traffic_lab.report festival-risk</code> against
+      <code>data/sample_network.csv</code> and <code>data/landmarks.sample.csv</code> +
+      <code>data/festivals.sample.yaml</code>. Both source files are marked illustrative
+      in the repo — see <code>docs/RESEARCH.md</code> before using this on a real road network.
+    </p>
+  </header>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="var-tag">variable #3 · critical roads</span>
+      <h2 class="card-title">Which road, if closed, hurts the network most</h2>
+      <p class="card-note">
+        Edge color/thickness is betweenness centrality — how much through-traffic a
+        segment carries between everything else. The bridge between the two clusters
+        scores 16&times; higher than the weakest link and, uniquely, splits the network
+        in two if it closes.
+      </p>
+    </div>
+
+    <div class="network-layout">
+      <div class="diagram-frame">
+        <svg class="netviz" id="netviz" viewBox="0 0 900 480" role="img" aria-label="Sample road network diagram, edges weighted by betweenness centrality"></svg>
+        <div class="ramp-legend" style="padding: 8px 6px 2px;">
+          <span>less critical</span>
+          <span class="bar"></span>
+          <span>more critical</span>
+        </div>
+      </div>
+
+      <div class="rank-list" id="rankList"></div>
+    </div>
+
+    <details class="table-toggle">
+      <summary>View as table</summary>
+      <div class="overflow-x">
+        <table class="plain-table" id="roadsTable">
+          <thead><tr><th>Road</th><th>Segment</th><th>Betweenness</th><th>If closed</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="var-tag">variable #2 &amp; #4 · work-window vs. religious calendar</span>
+      <h2 class="card-title">30-day congestion-risk calendar for the sample landmarks</h2>
+      <p class="card-note">
+        Weekly recurring peak days (Friday Jumu'ah, Tue/Sat Hanuman temple, Saturday
+        Shani temple, Sunday mass) plus the sample festival calendar. This is exactly
+        the signal <code class="mono">workzone_scheduler.py</code> uses to decide when
+        road-digging near a landmark should be blacked out. Hover or focus a cell for
+        why it's flagged.
+      </p>
+    </div>
+
+    <div class="heatmap-scroll">
+      <table class="heatmap" id="heatmap"></table>
+    </div>
+
+    <div class="hm-legend" id="hmLegend"></div>
+
+    <details class="table-toggle">
+      <summary>View as table (elevated risk or higher only)</summary>
+      <div class="overflow-x">
+        <table class="plain-table" id="riskTable">
+          <thead><tr><th>Date</th><th>Landmark</th><th>Level</th><th>Reason</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="var-tag">variable #4 · real coordinates</span>
+      <h2 class="card-title">Where these landmarks actually sit</h2>
+      <p class="card-note">
+        Marker positions are a true projection of each landmark's real lat/lon — not a
+        stylized layout. The faint gray points (Cubbon Park, Vidhana Soudha, Majestic,
+        KR Market, MG Road, Lalbagh) are well-known reference points for orientation
+        only; they're not part of the dataset. Step through the day to watch risk shift.
+      </p>
+    </div>
+
+    <div class="geo-controls">
+      <button class="geo-btn" id="dayPrev" aria-label="Previous day">‹</button>
+      <div class="geo-date" id="geoDateLabel"></div>
+      <button class="geo-btn" id="dayNext" aria-label="Next day">›</button>
+    </div>
+
+    <div class="diagram-frame">
+      <svg class="geomap" id="geoMap" viewBox="0 0 900 640" role="img" aria-label="Geographic projection of sample landmark coordinates"></svg>
+    </div>
+
+    <div class="hm-legend" id="geoLegend"></div>
+    <p class="geo-flagged" id="geoFlagged"></p>
+
+    <p class="card-note">
+      Road geometry isn't drawn here: this sandbox's network egress blocks
+      OpenStreetMap/Overpass/Nominatim outright, so there's no real street data
+      available to plot alongside these points. <code class="mono">graph_io.fetch_osm_graph()</code>
+      already supports pulling a real road network — run the same criticality
+      analysis from a machine with normal internet access to get an actual
+      street-level version of the map in the first section.
+    </p>
+  </section>
+
+  <footer class="page-foot">
+    Source: <code>bengaluru-traffic-lab/src/traffic_lab/{criticality,calendar_rules,workzone_scheduler}.py</code>
+    in the <code>claude/kind-hamilton-5kj8hc</code> branch. Sample data only — see
+    <code>docs/RESEARCH.md</code> for what's verified vs. illustrative, and the roadmap
+    for turning this into a live-data tool.
+  </footer>
+</div>
+
+<div id="tooltip" role="tooltip"></div>
+
+<script type="application/json" id="raw-data">
+{"critical_roads": [{"road": "Connector Bridge", "from": "D", "to": "E", "betweenness": 0.57143, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 375.0, "delta": null, "disconnects_network": true}}, {"road": "East Loop Road", "from": "A", "to": "D", "betweenness": 0.26786, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 905.3571428571429, "delta": 80.35714285714289, "disconnects_network": false}}, {"road": "West Loop Road", "from": "C", "to": "D", "betweenness": 0.26786, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 905.3571428571429, "delta": 80.35714285714289, "disconnects_network": false}}, {"road": "South Main Road", "from": "E", "to": "F", "betweenness": 0.19643, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 905.3571428571429, "delta": 80.35714285714289, "disconnects_network": false}}, {"road": "Dock Loop Road", "from": "E", "to": "H", "betweenness": 0.19643, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 905.3571428571429, "delta": 80.35714285714289, "disconnects_network": false}}, {"road": "South Diagonal", "from": "E", "to": "G", "betweenness": 0.17857, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 851.7857142857143, "delta": 26.785714285714334, "disconnects_network": false}}, {"road": "North Main Road", "from": "A", "to": "B", "betweenness": 0.125, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 841.0714285714286, "delta": 16.071428571428555, "disconnects_network": false}}, {"road": "North Cross Road", "from": "B", "to": "C", "betweenness": 0.125, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 841.0714285714286, "delta": 16.071428571428555, "disconnects_network": false}}, {"road": "South Cross Road", "from": "F", "to": "G", "betweenness": 0.05357, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 841.0714285714286, "delta": 16.071428571428555, "disconnects_network": false}}, {"road": "Harbor Loop Road", "from": "G", "to": "H", "betweenness": 0.05357, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 841.0714285714286, "delta": 16.071428571428555, "disconnects_network": false}}, {"road": "Diagonal Shortcut", "from": "A", "to": "C", "betweenness": 0.03571, "removal_impact": {"baseline_avg_path": 825.0, "after_removal_avg_path": 830.3571428571429, "delta": 5.35714285714289, "disconnects_network": false}}], "festival_grid": {"start": "2026-09-18", "days": 30, "landmarks": [{"name": "Bull Temple (Basavanagudi)", "kind": "temple_generic", "cells": [{"date": "2026-09-18", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-09-19", "level": "none", "reasons": []}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Weekly peak day for temple_generic (Friday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-10-03", "level": "none", "reasons": []}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-10-10", "level": "none", "reasons": []}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "elevated", "reasons": ["Weekly peak day for temple_generic (Friday)"]}, {"date": "2026-10-17", "level": "none", "reasons": []}]}, {"name": "Jumma Masjid (Bangalore City)", "kind": "masjid", "cells": [{"date": "2026-09-18", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-09-19", "level": "none", "reasons": []}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Weekly peak day for masjid (Friday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-10-03", "level": "none", "reasons": []}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-10-10", "level": "none", "reasons": []}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "elevated", "reasons": ["Weekly peak day for masjid (Friday)"]}, {"date": "2026-10-17", "level": "none", "reasons": []}]}, {"name": "Someshwara Temple (Ulsoor)", "kind": "shani_temple", "cells": [{"date": "2026-09-18", "level": "none", "reasons": []}, {"date": "2026-09-19", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Weekly peak day for shani_temple (Saturday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "none", "reasons": []}, {"date": "2026-10-03", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "none", "reasons": []}, {"date": "2026-10-10", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "none", "reasons": []}, {"date": "2026-10-17", "level": "elevated", "reasons": ["Weekly peak day for shani_temple (Saturday)"]}]}, {"name": "St. Mary's Basilica", "kind": "church", "cells": [{"date": "2026-09-18", "level": "none", "reasons": []}, {"date": "2026-09-19", "level": "none", "reasons": []}, {"date": "2026-09-20", "level": "elevated", "reasons": ["Weekly peak day for church (Sunday)"]}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "none", "reasons": []}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Weekly peak day for church (Sunday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "none", "reasons": []}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "none", "reasons": []}, {"date": "2026-10-03", "level": "none", "reasons": []}, {"date": "2026-10-04", "level": "elevated", "reasons": ["Weekly peak day for church (Sunday)"]}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "none", "reasons": []}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "none", "reasons": []}, {"date": "2026-10-10", "level": "none", "reasons": []}, {"date": "2026-10-11", "level": "elevated", "reasons": ["Weekly peak day for church (Sunday)"]}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "none", "reasons": []}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "none", "reasons": []}, {"date": "2026-10-17", "level": "none", "reasons": []}]}, {"name": "Sri Prasanna Anjaneya Temple (illustrative)", "kind": "hanuman_temple", "cells": [{"date": "2026-09-18", "level": "none", "reasons": []}, {"date": "2026-09-19", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}, {"date": "2026-09-20", "level": "none", "reasons": []}, {"date": "2026-09-21", "level": "none", "reasons": []}, {"date": "2026-09-22", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-09-23", "level": "none", "reasons": []}, {"date": "2026-09-24", "level": "none", "reasons": []}, {"date": "2026-09-25", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-26", "level": "extreme", "reasons": ["Weekly peak day for hanuman_temple (Saturday)", "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-27", "level": "extreme", "reasons": ["Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY (extreme) — Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."]}, {"date": "2026-09-28", "level": "none", "reasons": []}, {"date": "2026-09-29", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-09-30", "level": "none", "reasons": []}, {"date": "2026-10-01", "level": "none", "reasons": []}, {"date": "2026-10-02", "level": "none", "reasons": []}, {"date": "2026-10-03", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}, {"date": "2026-10-04", "level": "none", "reasons": []}, {"date": "2026-10-05", "level": "none", "reasons": []}, {"date": "2026-10-06", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-10-07", "level": "none", "reasons": []}, {"date": "2026-10-08", "level": "none", "reasons": []}, {"date": "2026-10-09", "level": "none", "reasons": []}, {"date": "2026-10-10", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}, {"date": "2026-10-11", "level": "none", "reasons": []}, {"date": "2026-10-12", "level": "none", "reasons": []}, {"date": "2026-10-13", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Tuesday)"]}, {"date": "2026-10-14", "level": "none", "reasons": []}, {"date": "2026-10-15", "level": "none", "reasons": []}, {"date": "2026-10-16", "level": "none", "reasons": []}, {"date": "2026-10-17", "level": "elevated", "reasons": ["Weekly peak day for hanuman_temple (Saturday)"]}]}]}}
+</script>
+
+<script type="application/json" id="geo-data">
+{
+  "landmarks": [
+    {"name": "Bull Temple (Basavanagudi)", "kind": "temple_generic", "lat": 12.9432, "lon": 77.5721, "radius_m": 400},
+    {"name": "Jumma Masjid (Bangalore City)", "kind": "masjid", "lat": 12.9634, "lon": 77.5793, "radius_m": 400},
+    {"name": "Someshwara Temple (Ulsoor)", "kind": "shani_temple", "lat": 12.9815, "lon": 77.6202, "radius_m": 300},
+    {"name": "St. Mary's Basilica", "kind": "church", "lat": 12.9634, "lon": 77.6089, "radius_m": 400},
+    {"name": "Sri Prasanna Anjaneya Temple (illustrative)", "kind": "hanuman_temple", "lat": 12.9550, "lon": 77.5850, "radius_m": 300}
+  ],
+  "reference_points": [
+    {"name": "Cubbon Park", "lat": 12.9763, "lon": 77.5929},
+    {"name": "Vidhana Soudha", "lat": 12.9794, "lon": 77.5912},
+    {"name": "City Railway Stn (Majestic)", "lat": 12.9767, "lon": 77.5713},
+    {"name": "KR Market", "lat": 12.9634, "lon": 77.5779},
+    {"name": "MG Road", "lat": 12.9756, "lon": 77.6068},
+    {"name": "Lalbagh", "lat": 12.9507, "lon": 77.5848}
+  ]
+}
+</script>
+
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("raw-data").textContent);
+  var GEO = JSON.parse(document.getElementById("geo-data").textContent);
+  var roads = DATA.critical_roads.slice().sort(function (a, b) { return b.betweenness - a.betweenness; });
+  var grid = DATA.festival_grid;
+
+  // ---------- shared: sequential blue ramp lerp (light -> dark, by magnitude) ----------
+  function hexToRgb(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbToHex(rgb) {
+    return "#" + rgb.map(function (c) {
+      return Math.round(Math.max(0, Math.min(255, c))).toString(16).padStart(2, "0");
+    }).join("");
+  }
+  var SEQ_LO = hexToRgb("#9ec5f4"); // step 200
+  var SEQ_HI = hexToRgb("#104281"); // step 650
+  function seqColor(t) {
+    t = Math.max(0, Math.min(1, t));
+    return rgbToHex(SEQ_LO.map(function (c, i) { return c + (SEQ_HI[i] - c) * t; }));
+  }
+
+  var maxScore = roads[0].betweenness;
+  var minScore = roads[roads.length - 1].betweenness;
+  function norm(score) {
+    if (maxScore === minScore) return 1;
+    return (score - minScore) / (maxScore - minScore);
+  }
+
+  // ---------- network diagram ----------
+  // Hand-placed layout mirroring the sample network's topology: two 4-node
+  // clusters (A-B-C-D and E-F-G-H), each a cycle plus one diagonal, joined by
+  // a single bridge edge (D-E) — the layout IS the story: one link between
+  // two dense clusters.
+  var pos = {
+    A: [150, 150], B: [150, 380], C: [350, 380], D: [350, 150],
+    E: [550, 150], F: [550, 380], G: [750, 380], H: [750, 150]
+  };
+  var svg = document.getElementById("netviz");
+  var ns = "http://www.w3.org/2000/svg";
+  function el(tag, attrs) {
+    var e = document.createElementNS(ns, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  var bridge = roads.find(function (r) { return r.removal_impact.disconnects_network; });
+
+  roads.forEach(function (r) {
+    var p1 = pos[r.from], p2 = pos[r.to];
+    if (!p1 || !p2) return;
+    var t = norm(r.betweenness);
+    var width = 2.5 + t * 11;
+    var isBridge = r === bridge;
+    var line = el("line", {
+      x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1],
+      stroke: seqColor(t), "stroke-width": width, "stroke-linecap": "round"
+    });
+    svg.appendChild(line);
+    if (isBridge) {
+      var halo = el("line", {
+        x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1],
+        stroke: "#d03b3b", "stroke-width": width + 7, "stroke-linecap": "round",
+        opacity: "0.28"
+      });
+      svg.insertBefore(halo, line);
+    }
+    var mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
+    var dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var offx = -(dy / len) * 14, offy = (dx / len) * 14;
+    var label = el("text", { x: mx + offx, y: my + offy, class: "edge-label", "text-anchor": "middle" });
+    label.textContent = r.road;
+    svg.appendChild(label);
+  });
+
+  if (bridge) {
+    var p1 = pos[bridge.from], p2 = pos[bridge.to];
+    var cx = (p1[0] + p2[0]) / 2;
+    var callout = el("text", { x: cx, y: p1[1] - 22, class: "callout", "text-anchor": "middle" });
+    callout.textContent = "closing this disconnects the network";
+    svg.appendChild(callout);
+  }
+
+  Object.keys(pos).forEach(function (name) {
+    var p = pos[name];
+    svg.appendChild(el("circle", { cx: p[0], cy: p[1], r: 16, class: "node-dot" }));
+    var t = el("text", { x: p[0], y: p[1] + 5, class: "node-label", "text-anchor": "middle" });
+    t.textContent = name;
+    svg.appendChild(t);
+  });
+
+  // ---------- ranked bar list ----------
+  var rankList = document.getElementById("rankList");
+  roads.forEach(function (r, i) {
+    var t = norm(r.betweenness);
+    var row = document.createElement("div");
+    row.className = "rank-row";
+    var idx = document.createElement("div");
+    idx.className = "rank-index mono";
+    idx.textContent = (i + 1) + ".";
+    var track = document.createElement("div");
+    track.className = "rank-bar-track";
+    var fill = document.createElement("div");
+    fill.className = "rank-bar-fill";
+    fill.style.width = Math.max(8, t * 100) + "%";
+    fill.style.background = seqColor(t);
+    var text = document.createElement("div");
+    text.className = "rank-bar-text";
+    var nameSpan = document.createElement("span");
+    nameSpan.textContent = r.road;
+    nameSpan.style.color = t > 0.55 ? "#fff" : "var(--text-primary)";
+    var rightWrap = document.createElement("span");
+    rightWrap.style.display = "inline-flex";
+    rightWrap.style.gap = "6px";
+    rightWrap.style.alignItems = "center";
+    var score = document.createElement("span");
+    score.className = "rank-score mono";
+    score.style.color = t > 0.55 ? "rgba(255,255,255,0.85)" : "var(--text-secondary)";
+    score.textContent = r.betweenness.toFixed(3);
+    rightWrap.appendChild(score);
+    if (r.removal_impact.disconnects_network) {
+      var pill = document.createElement("span");
+      pill.className = "critical-pill";
+      pill.textContent = "splits network";
+      rightWrap.appendChild(pill);
+    }
+    text.appendChild(nameSpan);
+    text.appendChild(rightWrap);
+    track.appendChild(fill);
+    track.appendChild(text);
+    row.appendChild(idx);
+    row.appendChild(track);
+    rankList.appendChild(row);
+  });
+
+  var roadsTbody = document.querySelector("#roadsTable tbody");
+  roads.forEach(function (r) {
+    var tr = document.createElement("tr");
+    var impact = r.removal_impact.disconnects_network
+      ? "Disconnects the network"
+      : "+" + Math.round(r.removal_impact.delta) + "m avg. detour";
+    tr.innerHTML =
+      "<td>" + r.road + "</td>" +
+      "<td class='num mono'>" + r.from + " ↔ " + r.to + "</td>" +
+      "<td class='num mono'>" + r.betweenness.toFixed(5) + "</td>" +
+      "<td>" + impact + "</td>";
+    roadsTbody.appendChild(tr);
+  });
+
+  // ---------- heatmap ----------
+  var LEVEL_INFO = {
+    none:     { label: "None",     bg: "var(--status-none-bg)",     fg: "var(--status-none-fg)" },
+    elevated: { label: "Elevated", bg: "var(--status-warning-bg)",  fg: "var(--status-warning)" },
+    high:     { label: "High",     bg: "var(--status-serious-bg)",  fg: "var(--status-serious)" },
+    extreme:  { label: "Extreme",  bg: "var(--status-critical-bg)", fg: "var(--status-critical)" }
+  };
+  var LEVEL_DOT = { none: "#898781", elevated: "#fab219", high: "#ec835a", extreme: "#d03b3b" };
+
+  var table = document.getElementById("heatmap");
+  var dates = grid.landmarks[0].cells.map(function (c) { return c.date; });
+
+  var monthRow = document.createElement("tr");
+  monthRow.appendChild(document.createElement("th"));
+  var dayRow = document.createElement("tr");
+  var dayHeader = document.createElement("th");
+  dayHeader.className = "hm-corner";
+  dayHeader.textContent = "Landmark";
+  dayRow.appendChild(dayHeader);
+
+  var lastMonth = null;
+  dates.forEach(function (dateStr) {
+    var d = new Date(dateStr + "T00:00:00");
+    var month = d.toLocaleString("en-US", { month: "short" });
+    var th1 = document.createElement("th");
+    if (month !== lastMonth) {
+      th1.className = "hm-month";
+      th1.textContent = month;
+      lastMonth = month;
+    }
+    monthRow.appendChild(th1);
+
+    var th2 = document.createElement("th");
+    var wd = d.getDay();
+    th2.className = "hm-day" + (wd === 0 || wd === 6 ? " is-weekend" : "");
+    th2.textContent = d.getDate();
+    dayRow.appendChild(th2);
+  });
+  table.appendChild(monthRow);
+  table.appendChild(dayRow);
+
+  var tooltip = document.getElementById("tooltip");
+  function showTooltip(target, landmarkName, cell) {
+    var info = LEVEL_INFO[cell.level];
+    var html = "<div class='tt-title'>" + landmarkName + " — " + cell.date + "</div>" + info.label + " risk";
+    if (cell.reasons.length) {
+      html += "<ul>" + cell.reasons.map(function (r) { return "<li>" + r + "</li>"; }).join("") + "</ul>";
+    }
+    tooltip.innerHTML = html;
+    var rect = target.getBoundingClientRect();
+    var top = rect.top - tooltip.offsetHeight - 10;
+    var left = rect.left + rect.width / 2 - 130;
+    tooltip.style.top = Math.max(8, top) + "px";
+    tooltip.style.left = Math.max(8, Math.min(window.innerWidth - 268, left)) + "px";
+    tooltip.classList.add("visible");
+  }
+  function hideTooltip() { tooltip.classList.remove("visible"); }
+
+  grid.landmarks.forEach(function (landmark) {
+    var row = document.createElement("tr");
+    var rowLabel = document.createElement("th");
+    rowLabel.className = "hm-rowlabel";
+    rowLabel.innerHTML = landmark.name + "<span class='hm-kind'>" + landmark.kind.replace(/_/g, " ") + "</span>";
+    row.appendChild(rowLabel);
+
+    landmark.cells.forEach(function (cell) {
+      var td = document.createElement("td");
+      td.className = "hm-cell";
+      td.style.background = LEVEL_INFO[cell.level].bg;
+      td.tabIndex = 0;
+      var wd = new Date(cell.date + "T00:00:00").getDay();
+      if (cell.level !== "none") {
+        td.style.boxShadow = "inset 0 0 0 1px " + LEVEL_DOT[cell.level];
+      }
+      td.setAttribute("aria-label", landmark.name + ", " + cell.date + ", " + LEVEL_INFO[cell.level].label + " risk" + (cell.reasons.length ? ": " + cell.reasons.join("; ") : ""));
+      td.addEventListener("mouseenter", function () { showTooltip(td, landmark.name, cell); });
+      td.addEventListener("focus", function () { showTooltip(td, landmark.name, cell); });
+      td.addEventListener("mouseleave", hideTooltip);
+      td.addEventListener("blur", hideTooltip);
+      row.appendChild(td);
+    });
+    table.appendChild(row);
+  });
+
+  var legend = document.getElementById("hmLegend");
+  ["none", "elevated", "high", "extreme"].forEach(function (level) {
+    var item = document.createElement("div");
+    item.className = "hm-legend-item";
+    var sw = document.createElement("span");
+    sw.className = "hm-swatch";
+    sw.style.background = LEVEL_INFO[level].bg;
+    sw.style.boxShadow = level !== "none" ? "inset 0 0 0 1px " + LEVEL_DOT[level] : "none";
+    var lbl = document.createElement("span");
+    lbl.textContent = LEVEL_INFO[level].label;
+    item.appendChild(sw);
+    item.appendChild(lbl);
+    legend.appendChild(item);
+  });
+
+  var riskTbody = document.querySelector("#riskTable tbody");
+  var flatRisk = [];
+  grid.landmarks.forEach(function (landmark) {
+    landmark.cells.forEach(function (cell) {
+      if (cell.level !== "none") flatRisk.push({ landmark: landmark.name, cell: cell });
+    });
+  });
+  flatRisk.sort(function (a, b) { return a.cell.date.localeCompare(b.cell.date); });
+  flatRisk.forEach(function (item) {
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td class='num mono'>" + item.cell.date + "</td>" +
+      "<td>" + item.landmark + "</td>" +
+      "<td>" + LEVEL_INFO[item.cell.level].label + "</td>" +
+      "<td>" + item.cell.reasons.join("; ") + "</td>";
+    riskTbody.appendChild(tr);
+  });
+
+  // ---------- geographic map ----------
+  (function () {
+    var W = 900, H = 640, PAD = 70;
+    var allPoints = GEO.landmarks.concat(GEO.reference_points);
+    var lat0 = allPoints.reduce(function (s, p) { return s + p.lat; }, 0) / allPoints.length;
+    var lon0 = allPoints.reduce(function (s, p) { return s + p.lon; }, 0) / allPoints.length;
+    var M_PER_DEG_LAT = 111320;
+    var M_PER_DEG_LON = 111320 * Math.cos(lat0 * Math.PI / 180);
+
+    function toMeters(p) {
+      return { x: (p.lon - lon0) * M_PER_DEG_LON, y: (p.lat - lat0) * M_PER_DEG_LAT };
+    }
+    var metersPts = allPoints.map(toMeters);
+    var extentX = Math.max.apply(null, metersPts.map(function (p) { return Math.abs(p.x); })) || 1;
+    var extentY = Math.max.apply(null, metersPts.map(function (p) { return Math.abs(p.y); })) || 1;
+    var pxPerMeter = Math.min((W - PAD * 2) / (extentX * 2), (H - PAD * 2) / (extentY * 2));
+
+    function project(p) {
+      var m = toMeters(p);
+      return { x: W / 2 + m.x * pxPerMeter, y: H / 2 - m.y * pxPerMeter };
+    }
+
+    var svg = document.getElementById("geoMap");
+    function gel(tag, attrs) {
+      var e = document.createElementNS(ns, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
+    }
+
+    // graticule every 0.01 degree (~1.1km lat / ~1.08km lon here)
+    var step = 0.01;
+    var lonStart = lon0 - extentX / M_PER_DEG_LON, lonEnd = lon0 + extentX / M_PER_DEG_LON;
+    var latStart = lat0 - extentY / M_PER_DEG_LAT, latEnd = lat0 + extentY / M_PER_DEG_LAT;
+    for (var lon = Math.ceil(lonStart / step) * step; lon <= lonEnd; lon += step) {
+      var p = project({ lat: lat0, lon: lon });
+      svg.appendChild(gel("line", { x1: p.x, y1: PAD - 20, x2: p.x, y2: H - PAD + 20, class: "grat-line" }));
+      var lbl = gel("text", { x: p.x, y: PAD - 26, class: "grat-label", "text-anchor": "middle" });
+      lbl.textContent = lon.toFixed(2) + "°E";
+      svg.appendChild(lbl);
+    }
+    for (var lat = Math.ceil(latStart / step) * step; lat <= latEnd; lat += step) {
+      var p2 = project({ lat: lat, lon: lon0 });
+      svg.appendChild(gel("line", { x1: PAD - 20, y1: p2.y, x2: W - PAD + 20, y2: p2.y, class: "grat-line" }));
+      var lbl2 = gel("text", { x: PAD - 26, y: p2.y + 3, class: "grat-label", "text-anchor": "end" });
+      lbl2.textContent = lat.toFixed(2) + "°N";
+      svg.appendChild(lbl2);
+    }
+
+    // reference points (orientation only)
+    GEO.reference_points.forEach(function (r) {
+      var p = project(r);
+      svg.appendChild(gel("circle", { cx: p.x, cy: p.y, r: 4, class: "ref-dot" }));
+      var t = gel("text", { x: p.x - 8, y: p.y - 8, class: "ref-label", "text-anchor": "end" });
+      t.textContent = r.name;
+      svg.appendChild(t);
+    });
+
+    // scale bar: nearest round number of meters that renders 80-160px
+    var candidates = [100, 200, 250, 500, 1000, 2000];
+    var scaleM = candidates.reduce(function (best, c) {
+      var px = c * pxPerMeter;
+      return (px >= 60 && px <= 170) ? c : best;
+    }, 500);
+    var barPx = scaleM * pxPerMeter;
+    var sbX = W - PAD - barPx, sbY = H - 34;
+    svg.appendChild(gel("line", { x1: sbX, y1: sbY, x2: sbX + barPx, y2: sbY, stroke: "var(--text-muted)", "stroke-width": 2 }));
+    [sbX, sbX + barPx].forEach(function (x) {
+      svg.appendChild(gel("line", { x1: x, y1: sbY - 5, x2: x, y2: sbY + 5, stroke: "var(--text-muted)", "stroke-width": 2 }));
+    });
+    var sbLabel = gel("text", { x: sbX + barPx / 2, y: sbY - 10, class: "scale-text", "text-anchor": "middle" });
+    sbLabel.textContent = (scaleM >= 1000 ? (scaleM / 1000) + " km" : scaleM + " m");
+    svg.appendChild(sbLabel);
+
+    // compass
+    var cx = PAD - 30, cy = H - 55;
+    svg.appendChild(gel("line", { x1: cx, y1: cy + 16, x2: cx, y2: cy - 16, stroke: "var(--text-secondary)", "stroke-width": 1.5, "marker-end": "url(#arrowhead)" }));
+    var defs = gel("defs", {});
+    var marker = gel("marker", { id: "arrowhead", markerWidth: 8, markerHeight: 8, refX: 4, refY: 4, orient: "auto" });
+    var arrowPath = gel("path", { d: "M0,0 L8,4 L0,8 Z", fill: "var(--text-secondary)" });
+    marker.appendChild(arrowPath);
+    defs.appendChild(marker);
+    svg.insertBefore(defs, svg.firstChild);
+    var nLabel = gel("text", { x: cx, y: cy - 20, class: "compass-text", "text-anchor": "middle" });
+    nLabel.textContent = "N";
+    svg.appendChild(nLabel);
+
+    // landmark markers (drawn last, on top) — radius circle scaled from radius_m
+    var markerGroup = gel("g", {});
+    svg.appendChild(markerGroup);
+
+    function currentLevelFor(landmarkName, dayIndex) {
+      var row = grid.landmarks.find(function (l) { return l.name === landmarkName; });
+      return row ? row.cells[dayIndex] : { level: "none", reasons: [] };
+    }
+
+    var dayIndex = 0;
+    var dates = grid.landmarks[0].cells.map(function (c) { return c.date; });
+
+    function render() {
+      markerGroup.innerHTML = "";
+      var flaggedToday = [];
+      GEO.landmarks.forEach(function (lm) {
+        var p = project(lm);
+        var cell = currentLevelFor(lm.name, dayIndex);
+        var info = LEVEL_INFO[cell.level];
+        var dot = LEVEL_DOT[cell.level];
+        var radiusPx = Math.max(10, lm.radius_m * pxPerMeter);
+
+        var zone = gel("circle", { cx: p.x, cy: p.y, r: radiusPx, fill: dot, opacity: cell.level === "none" ? 0.06 : 0.16 });
+        markerGroup.appendChild(zone);
+
+        var marker = gel("circle", {
+          cx: p.x, cy: p.y, r: 9, class: "lm-dot",
+          fill: cell.level === "none" ? "var(--surface-2)" : dot,
+          stroke: dot
+        });
+        marker.setAttribute("tabindex", "0");
+        marker.setAttribute("aria-label", lm.name + ": " + info.label + " risk on " + dates[dayIndex]);
+        markerGroup.appendChild(marker);
+
+        var label = gel("text", { x: p.x + 13, y: p.y - 10, class: "lm-label" });
+        label.textContent = lm.name.replace(/ \(.*\)$/, "");
+        markerGroup.appendChild(label);
+
+        function show() { showTooltip(marker, lm.name, cell); }
+        marker.addEventListener("mouseenter", show);
+        marker.addEventListener("focus", show);
+        marker.addEventListener("mouseleave", hideTooltip);
+        marker.addEventListener("blur", hideTooltip);
+
+        if (cell.level !== "none") flaggedToday.push(lm.name.replace(/ \(.*\)$/, "") + " (" + info.label + ")");
+      });
+
+      var d = new Date(dates[dayIndex] + "T00:00:00");
+      document.getElementById("geoDateLabel").innerHTML =
+        "<span class='mono'>" + dates[dayIndex] + "</span> <span class='geo-weekday'>" + d.toLocaleDateString("en-US", { weekday: "long" }) + "</span>";
+      document.getElementById("geoFlagged").innerHTML = flaggedToday.length
+        ? "<strong>Flagged today:</strong> " + flaggedToday.join(", ")
+        : "<span class='none-flagged'>Nothing flagged for this date.</span>";
+
+      document.getElementById("dayPrev").disabled = dayIndex === 0;
+      document.getElementById("dayNext").disabled = dayIndex === dates.length - 1;
+    }
+
+    document.getElementById("dayPrev").addEventListener("click", function () { if (dayIndex > 0) { dayIndex--; render(); } });
+    document.getElementById("dayNext").addEventListener("click", function () { if (dayIndex < dates.length - 1) { dayIndex++; render(); } });
+
+    var geoLegend = document.getElementById("geoLegend");
+    ["none", "elevated", "high", "extreme"].forEach(function (level) {
+      var item = document.createElement("div");
+      item.className = "hm-legend-item";
+      var sw = document.createElement("span");
+      sw.className = "hm-swatch";
+      sw.style.background = LEVEL_INFO[level].bg;
+      sw.style.boxShadow = level !== "none" ? "inset 0 0 0 1px " + LEVEL_DOT[level] : "none";
+      var lbl3 = document.createElement("span");
+      lbl3.textContent = LEVEL_INFO[level].label;
+      item.appendChild(sw);
+      item.appendChild(lbl3);
+      geoLegend.appendChild(item);
+    });
+
+    render();
+  })();
+})();
+</script>

@@ -43,6 +43,15 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt pytest
 ```
 
+## Sample output, visualized
+
+`docs/sample-output.html` is a static, open-in-any-browser rendering of what the CLI
+below actually produces: the critical-roads ranking as a diagram, the 30-day
+festival-risk calendar as a heatmap, and the sample landmarks plotted on a real
+lat/lon-projected map (with orientation reference points) that you can step through
+day by day. It's generated from the same sample data in this directory — open it
+directly, no server needed.
+
 ## Try it with the bundled sample data
 
 The `data/*.sample.*` files are illustrative only (a synthetic 8-node road network,

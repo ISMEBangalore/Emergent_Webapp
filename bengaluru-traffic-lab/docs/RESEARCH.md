@@ -143,6 +143,15 @@ cheaply they slot into the existing data model:
 3. **A real OSM extract + real landmark/festival data**, verified against official
    sources, to replace the `*.sample.*` placeholder files before anything here is
    used operationally.
-4. **A map UI** (e.g. `folium`, already listed as an optional dependency) to make the
-   critical-roads ranking and festival-risk calendar visually inspectable rather than
-   table-only.
+4. **A map UI.** `docs/sample-output.html` now plots the sample landmarks on a real
+   lat/lon projection (with a day-by-day risk view), but the critical-roads network
+   is still an abstract diagram — the sample road network (`data/sample_network.csv`)
+   is synthetic and has no real coordinates to plot. Getting an actual street-level
+   critical-roads map means running `graph_io.fetch_osm_graph()` against a real
+   place name and feeding its (real, geo-tagged) nodes into the same rendering
+   approach. Note for whoever does this next: OpenStreetMap/Overpass/Nominatim were
+   all unreachable from the sandbox this tool was built in (network egress policy
+   blocks them outright, confirmed via direct request) — this needs to run somewhere
+   with normal internet access. `folium` (already listed as an optional dependency)
+   is a reasonable alternative to hand-rolled SVG if that turns out to be easier once
+   real OSM geometry is available.
