@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bengaluru 3D Route &amp; Road-Improvement Simulator</title>
+
+<!--
+  ============================================================================
+  SETUP — read before opening this file in a browser
+  ============================================================================
+  This page needs the same Google Maps JavaScript API key as google-map.html
+  in this same folder, loaded the same way (see that file's own setup comment
+  for how to get a key). If you already have google-map-key.local.js set up
+  for google-map.html, this page reuses it automatically — nothing extra to
+  configure there.
+
+  What's DIFFERENT here: this page loads the Maps JavaScript API with the
+  "v=alpha" channel, because Photorealistic 3D Maps (the Map3DElement/maps3d
+  library this page uses) was still shipping under that channel as of when
+  this was built. Per Google's own docs, Map3DElement only needs the same
+  "Maps JavaScript API" you already enabled — no separate API to turn on.
+
+  COST NOTE: Photorealistic 3D Tiles are billed per tile fetch and are
+  reported to cost more per load than standard 2D map tiles. This page
+  throttles camera movement during the drive animation to limit how often
+  new tiles are requested, but be aware before leaving it open/panning
+  around a lot on a billed project.
+  ============================================================================
+-->
+<script src="./google-map-key.local.js" onerror="window.__noLocalKeyFile = true"></script>
+<script>
+  const GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || "";
+</script>
+
+<style>
+  :root {
+    --ink: #1c1b1f; --ink-secondary: #4a4750; --ink-muted: #79757f;
+    --hairline: #e4e0e8; --bg: #faf9fb; --card-bg: #ffffff;
+    --risk-none: #cbb9ea; --risk-elevated: #a172dd; --risk-high: #7a3fcf; --risk-extreme: #4a148c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  header { padding: 14px 24px; border-bottom: 1px solid var(--hairline); background: var(--card-bg); flex-shrink: 0; }
+  header h1 { margin: 0; font-size: 17px; }
+  header .sub { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-secondary); }
+  header nav { margin-top: 8px; font-size: 12.5px; }
+  header nav a { color: var(--risk-high); text-decoration: none; font-weight: 600; }
+  header nav a:hover { text-decoration: underline; }
+
+  .warn-card {
+    margin: 12px 24px 0; background: #fef3dc; border: 1px solid #f0d999; border-radius: 10px; padding: 12px 16px;
+    font-size: 12px; color: #6b4e00; line-height: 1.5; flex-shrink: 0;
+  }
+
+  #layout { flex: 1; min-height: 0; display: flex; gap: 0; }
+  #sidebar {
+    width: 380px; flex-shrink: 0; overflow-y: auto; padding: 16px; border-right: 1px solid var(--hairline);
+    background: var(--card-bg); display: flex; flex-direction: column; gap: 16px;
+  }
+  #mapCol { flex: 1; min-width: 0; position: relative; background: #d8d5db; }
+  #map3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #map3d-fallback {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    padding: 24px; text-align: center; font-size: 13px; color: var(--ink-secondary); background: #efedf1;
+  }
+
+  .card { border: 1px solid var(--hairline); border-radius: 10px; padding: 14px; background: var(--card-bg); }
+  .card h2 { margin: 0 0 8px; font-size: 13px; }
+  .card p.note { margin: 0 0 10px; font-size: 11.5px; color: var(--ink-muted); line-height: 1.5; }
+  label { font-size: 11px; color: var(--ink-muted); display: block; margin: 8px 0 3px; }
+  label:first-child { margin-top: 0; }
+  select, input[type="number"], input[type="range"] {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--hairline); border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button.primary {
+    width: 100%; margin-top: 10px; padding: 9px 12px; border: none; border-radius: 7px;
+    background: var(--risk-high); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  button.primary:hover { background: var(--risk-extreme); }
+  button.secondary {
+    width: 100%; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--hairline); border-radius: 7px;
+    background: #fff; color: var(--ink); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  button.secondary:hover { background: #f4f2f6; }
+
+  .route-summary { font-size: 12.5px; line-height: 1.6; }
+  .route-summary .big { font-size: 20px; font-weight: 800; }
+  .route-steps { list-style: none; margin: 8px 0 0; padding: 0; font-size: 11.5px; color: var(--ink-secondary); }
+  .route-steps li { padding: 3px 0; border-bottom: 1px dashed var(--hairline); }
+  .route-steps li:last-child { border-bottom: none; }
+
+  .edge-card { border: 1px solid var(--hairline); border-radius: 8px; padding: 10px; margin-top: 8px; }
+  .edge-card .edge-name { font-size: 12.5px; font-weight: 700; }
+  .edge-card .edge-meta { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+  .edge-card .vc-pill {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: #fff; margin-left: 6px;
+  }
+
+  .compare-summary {
+    display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 12px; background: #f4eefc;
+    border-radius: 8px; border-left: 3px solid var(--risk-high); font-size: 12px;
+  }
+  .compare-summary .label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-muted); }
+  .compare-summary .value { font-size: 16px; font-weight: 800; margin-top: 1px; }
+  .compare-summary .value.good { color: #0ca30c; }
+  .compare-summary .value.bad { color: var(--risk-extreme); }
+
+  #recoText { font-size: 12.5px; line-height: 1.6; color: var(--ink-secondary); margin: 8px 0 0; padding-left: 18px; }
+  #recoText li { margin-bottom: 6px; }
+
+  #setup-banner {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: #fef3dc; padding: 24px; text-align: center; font-size: 13px; color: #6b4e00; z-index: 5;
+  }
+  #setup-banner code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    #layout { flex-direction: column; overflow-y: auto; }
+    #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--hairline); }
+    #mapCol { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bengaluru 3D Route &amp; Road-Improvement Simulator</h1>
+  <p class="sub">A car drive between two points on Google's real Photorealistic 3D Tiles, over an illustrative arterial-road skeleton — with a Bureau of Public Roads (BPR) volume-delay model showing how widening, resurfacing, or festival rerouting changes travel time.</p>
+  <nav><a href="./google-map.html">&larr; Back to the congestion-risk map &amp; reports</a></nav>
+</header>
+
+<div class="warn-card">
+  <strong>What this actually is:</strong> the 23 junctions and 31 road corridors below are a hand-built,
+  <strong>illustrative</strong> skeleton of Bengaluru's major arterials (not full street-level OpenStreetMap
+  data — live OSM fetching wasn't reachable from this project's dev environment). Routes are drawn as straight
+  lines between junctions, not real street centerlines. Travel-time predictions use the standard BPR
+  volume-delay function (<code>travel_time = free_flow_time × (1 + 0.15×(volume/capacity)<sup>4</sup>)</code>)
+  with illustrative baseline volumes — a citable, transparent heuristic, not a calibrated simulation (no SUMO,
+  no real traffic counts) and not a real network traffic-assignment/equilibrium recomputation. The 3D imagery
+  itself is real Google Photorealistic 3D Tiles of actual Bengaluru. Treat every number here as directional
+  ("roughly how much better/worse"), not as a forecast.
+</div>
+
+<div id="layout">
+  <div id="sidebar">
+    <div class="card">
+      <h2>Drive</h2>
+      <p class="note">Pick a start and end junction, then watch a simulated drive along the currently fastest route (by predicted travel time). Playback is time-compressed so a real ~40-minute drive plays in well under a minute.</p>
+      <label for="fromSelect">From</label>
+      <select id="fromSelect"></select>
+      <label for="toSelect">To</label>
+      <select id="toSelect"></select>
+      <button type="button" class="primary" id="driveBtn">▶ Start drive</button>
+      <div id="routeSummary" class="route-summary" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card" id="improveCard" hidden>
+      <h2>Road improvements along this route</h2>
+      <p class="note">Each card below is one corridor on the route just computed. Widen it (more lanes), resurface it (better materials/potholes fixed → higher free-flow speed), or — where a real parallel corridor exists in this skeleton — reroute a share of its traffic during a festival/closure.</p>
+      <div id="edgeCards"></div>
+      <button type="button" class="primary" id="recalcBtn">Recalculate</button>
+      <button type="button" class="secondary" id="resetBtn">Reset all changes</button>
+    </div>
+
+    <div class="card" id="resultsCard" hidden>
+      <h2>Predicted impact</h2>
+      <div class="compare-summary" id="compareSummary"></div>
+      <ul id="recoText"></ul>
+    </div>
+  </div>
+
+  <div id="mapCol">
+    <div id="map3d"></div>
+    <div id="map3d-fallback">
+      <div>
+        <strong>3D map couldn't load.</strong><br>
+        This can happen if your key's Maps JavaScript API doesn't yet have Photorealistic 3D Maps enabled for
+        the <code>v=alpha</code> channel, or this environment blocks the 3D tile fetches. The route/BPR
+        calculations on the left still work without it.
+      </div>
+    </div>
+    <div id="setup-banner">
+      <div>
+        No Google Maps API key found. Add one the same way as for
+        <code>google-map.html</code> — see that file's setup comment, or create
+        <code>google-map-key.local.js</code> next to this file with
+        <code>window.GOOGLE_MAPS_API_KEY = "YOUR_KEY";</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="network-data">{"nodes":[{"id":"majestic","name":"Majestic / Kempegowda Bus Station","lat":12.9767,"lon":77.5713},{"id":"mg_road","name":"MG Road / Trinity Circle","lat":12.9757,"lon":77.6067},{"id":"hebbal","name":"Hebbal (NH44 junction)","lat":13.0358,"lon":77.597},{"id":"yeshwanthpur","name":"Yeshwanthpur","lat":13.028,"lon":77.554},{"id":"peenya","name":"Peenya industrial area","lat":13.028,"lon":77.52},{"id":"rajajinagar","name":"Rajajinagar","lat":12.999,"lon":77.551},{"id":"malleshwaram","name":"Malleshwaram","lat":13.001,"lon":77.573},{"id":"vijayanagar","name":"Vijayanagar","lat":12.9707,"lon":77.535},{"id":"basavanagudi","name":"Basavanagudi","lat":12.9432,"lon":77.5721},{"id":"banashankari","name":"Banashankari","lat":12.9255,"lon":77.5468},{"id":"jayanagar","name":"Jayanagar","lat":12.925,"lon":77.583},{"id":"btm_layout","name":"BTM Layout","lat":12.9166,"lon":77.6101},{"id":"koramangala","name":"Koramangala","lat":12.9352,"lon":77.6245},{"id":"indiranagar","name":"Indiranagar","lat":12.9719,"lon":77.6412},{"id":"domlur","name":"Domlur (ORR junction)","lat":12.961,"lon":77.6387},{"id":"silk_board","name":"Silk Board Junction","lat":12.9172,"lon":77.6228},{"id":"hsr_layout","name":"HSR Layout","lat":12.9116,"lon":77.6389},{"id":"bellandur","name":"Bellandur","lat":12.9257,"lon":77.6774},{"id":"marathahalli","name":"Marathahalli","lat":12.9591,"lon":77.6974},{"id":"whitefield","name":"Whitefield / ITPL","lat":12.986,"lon":77.736},{"id":"kr_puram","name":"K R Puram","lat":12.9945,"lon":77.695},{"id":"bommanahalli","name":"Bommanahalli (Hosur Road)","lat":12.899,"lon":77.615},{"id":"electronic_city","name":"Electronic City","lat":12.8452,"lon":77.6602}],"edges":[{"id":"e_majestic_hebbal","name":"Bellary Road (NH44)","u":"majestic","v":"hebbal","length_m":9000,"lanes":6,"free_flow_kmh":45,"base_volume_vph":4200,"tier":"arterial","reroute_alternates":[]},{"id":"e_hebbal_yeshwanthpur","name":"Tumkur Road link","u":"hebbal","v":"yeshwanthpur","length_m":7000,"lanes":4,"free_flow_kmh":40,"base_volume_vph":3800,"tier":"arterial","reroute_alternates":[]},{"id":"e_yeshwanthpur_majestic","name":"Tumkur Road","u":"yeshwanthpur","v":"majestic","length_m":6000,"lanes":6,"free_flow_kmh":40,"base_volume_vph":5400,"tier":"arterial","reroute_alternates":[]},{"id":"e_majestic_mgroad","name":"Central Bengaluru corridor","u":"majestic","v":"mg_road","length_m":4000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2600,"tier":"collector","reroute_alternates":[]},{"id":"e_mgroad_indiranagar","name":"Old Airport Road","u":"mg_road","v":"indiranagar","length_m":5000,"lanes":4,"free_flow_kmh":35,"base_volume_vph":3100,"tier":"collector","reroute_alternates":[]},{"id":"e_indiranagar_domlur","name":"Outer Ring Road (Indiranagar-Domlur)","u":"indiranagar","v":"domlur","length_m":3000,"lanes":6,"free_flow_kmh":40,"base_volume_vph":5800,"tier":"arterial","reroute_alternates":[]},{"id":"e_domlur_marathahalli","name":"Outer Ring Road (Domlur-Marathahalli)","u":"domlur","v":"marathahalli","length_m":6000,"lanes":6,"free_flow_kmh":40,"base_volume_vph":6300,"tier":"arterial","reroute_alternates":[]},{"id":"e_marathahalli_bellandur","name":"Outer Ring Road (Marathahalli-Bellandur)","u":"marathahalli","v":"bellandur","length_m":5000,"lanes":6,"free_flow_kmh":35,"base_volume_vph":6600,"tier":"arterial","reroute_alternates":[]},{"id":"e_bellandur_koramangala","name":"Sarjapur-Koramangala link","u":"bellandur","v":"koramangala","length_m":6000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":3400,"tier":"collector","reroute_alternates":[]},{"id":"e_marathahalli_whitefield","name":"Whitefield Main Road","u":"marathahalli","v":"whitefield","length_m":7000,"lanes":4,"free_flow_kmh":35,"base_volume_vph":4600,"tier":"arterial","reroute_alternates":[]},{"id":"e_whitefield_krpuram","name":"ITPL Main Road / Old Madras Road","u":"whitefield","v":"kr_puram","length_m":8000,"lanes":4,"free_flow_kmh":35,"base_volume_vph":4400,"tier":"arterial","reroute_alternates":[]},{"id":"e_krpuram_hebbal","name":"Old Madras Road - Hennur arc","u":"kr_puram","v":"hebbal","length_m":12000,"lanes":4,"free_flow_kmh":35,"base_volume_vph":4000,"tier":"arterial","reroute_alternates":[]},{"id":"e_silkboard_marathahalli","name":"Outer Ring Road (Silk Board-Marathahalli)","u":"silk_board","v":"marathahalli","length_m":7000,"lanes":6,"free_flow_kmh":30,"base_volume_vph":7500,"tier":"arterial","reroute_alternates":["e_silkboard_hsr","e_hsr_bellandur"]},{"id":"e_silkboard_btm","name":"Hosur Road - BTM link","u":"silk_board","v":"btm_layout","length_m":3000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":3200,"tier":"collector","reroute_alternates":[]},{"id":"e_btm_koramangala","name":"BTM - Koramangala link","u":"btm_layout","v":"koramangala","length_m":4000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2800,"tier":"collector","reroute_alternates":[]},{"id":"e_koramangala_indiranagar","name":"Koramangala - Indiranagar link","u":"koramangala","v":"indiranagar","length_m":5000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":3000,"tier":"collector","reroute_alternates":[]},{"id":"e_silkboard_hsr","name":"Hosur Road - HSR link","u":"silk_board","v":"hsr_layout","length_m":3000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2600,"tier":"collector","reroute_alternates":["e_silkboard_marathahalli"]},{"id":"e_hsr_bellandur","name":"HSR - Bellandur link","u":"hsr_layout","v":"bellandur","length_m":5000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2600,"tier":"collector","reroute_alternates":[]},{"id":"e_silkboard_electroniccity","name":"Hosur Road (Silk Board-Electronic City)","u":"silk_board","v":"electronic_city","length_m":9000,"lanes":6,"free_flow_kmh":40,"base_volume_vph":7200,"tier":"arterial","reroute_alternates":[]},{"id":"e_electroniccity_bommanahalli","name":"Hosur Road (Electronic City-Bommanahalli)","u":"electronic_city","v":"bommanahalli","length_m":6000,"lanes":6,"free_flow_kmh":40,"base_volume_vph":6400,"tier":"arterial","reroute_alternates":[]},{"id":"e_bommanahalli_silkboard","name":"Hosur Road (Bommanahalli-Silk Board)","u":"bommanahalli","v":"silk_board","length_m":3000,"lanes":6,"free_flow_kmh":35,"base_volume_vph":7000,"tier":"arterial","reroute_alternates":["e_silkboard_hsr"]},{"id":"e_majestic_basavanagudi","name":"Basavanagudi corridor","u":"majestic","v":"basavanagudi","length_m":4000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2400,"tier":"collector","reroute_alternates":[]},{"id":"e_basavanagudi_banashankari","name":"Kanakapura Road link","u":"basavanagudi","v":"banashankari","length_m":4000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2600,"tier":"collector","reroute_alternates":[]},{"id":"e_banashankari_jayanagar","name":"Banashankari - Jayanagar link","u":"banashankari","v":"jayanagar","length_m":3000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2200,"tier":"collector","reroute_alternates":[]},{"id":"e_jayanagar_btm","name":"Jayanagar - BTM link","u":"jayanagar","v":"btm_layout","length_m":3000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2400,"tier":"collector","reroute_alternates":[]},{"id":"e_majestic_vijayanagar","name":"Vijayanagar corridor","u":"majestic","v":"vijayanagar","length_m":6000,"lanes":4,"free_flow_kmh":35,"base_volume_vph":2800,"tier":"collector","reroute_alternates":[]},{"id":"e_vijayanagar_rajajinagar","name":"Vijayanagar - Rajajinagar link","u":"vijayanagar","v":"rajajinagar","length_m":4000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2200,"tier":"collector","reroute_alternates":[]},{"id":"e_rajajinagar_malleshwaram","name":"Rajajinagar - Malleshwaram link","u":"rajajinagar","v":"malleshwaram","length_m":3000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2000,"tier":"collector","reroute_alternates":[]},{"id":"e_malleshwaram_majestic","name":"Sampige Road corridor","u":"malleshwaram","v":"majestic","length_m":4000,"lanes":4,"free_flow_kmh":30,"base_volume_vph":2400,"tier":"collector","reroute_alternates":[]},{"id":"e_rajajinagar_peenya","name":"Peenya industrial corridor","u":"rajajinagar","v":"peenya","length_m":6000,"lanes":6,"free_flow_kmh":40,"base_volume_vph":3600,"tier":"arterial","reroute_alternates":[]},{"id":"e_peenya_yeshwanthpur","name":"Peenya - Yeshwanthpur link","u":"peenya","v":"yeshwanthpur","length_m":5000,"lanes":4,"free_flow_kmh":35,"base_volume_vph":2600,"tier":"collector","reroute_alternates":[]}]}</script>
+
+<script>
+  const NETWORK = JSON.parse(document.getElementById("network-data").textContent);
+  const NODE_BY_ID = Object.fromEntries(NETWORK.nodes.map((n) => [n.id, n]));
+  const EDGE_BY_ID = Object.fromEntries(NETWORK.edges.map((e) => [e.id, e]));
+
+  // ---------- JS port of traffic_lab.bpr + traffic_lab.route_sim ----------
+  const LANE_CAPACITY_VPH = 1800;
+  const BPR_ALPHA = 0.15;
+  const BPR_BETA = 4.0;
+  const PAVEMENT_SPEED_MULTIPLIER = { poor: 0.7, fair: 0.85, good: 1.0, excellent: 1.15 };
+
+  function freeFlowTimeS(lengthM, freeFlowKmh) {
+    const freeFlowMps = (freeFlowKmh * 1000) / 3600;
+    return lengthM / freeFlowMps;
+  }
+  function bprTravelTimeS(lengthM, freeFlowKmh, lanes, volumeVph) {
+    const fft = freeFlowTimeS(lengthM, freeFlowKmh);
+    const vc = volumeVph / (lanes * LANE_CAPACITY_VPH);
+    return fft * (1 + BPR_ALPHA * Math.pow(vc, BPR_BETA));
+  }
+  function vcRatio(volumeVph, lanes) {
+    return volumeVph / (lanes * LANE_CAPACITY_VPH);
+  }
+
+  // changes: Map<edgeId, { lanes?, pavement?, rerouteFraction? }>
+  function applyChanges(changes) {
+    const volumeByEdge = {};
+    NETWORK.edges.forEach((e) => { volumeByEdge[e.id] = e.base_volume_vph; });
+
+    changes.forEach((change, edgeId) => {
+      const frac = change.rerouteFraction || 0;
+      if (frac > 0) {
+        const edge = EDGE_BY_ID[edgeId];
+        const shed = edge.base_volume_vph * Math.min(Math.max(frac, 0), 1);
+        volumeByEdge[edgeId] -= shed;
+        const alts = edge.reroute_alternates;
+        const perAlt = shed / alts.length;
+        alts.forEach((altId) => { volumeByEdge[altId] = (volumeByEdge[altId] ?? EDGE_BY_ID[altId].base_volume_vph) + perAlt; });
+      }
+    });
+
+    const states = {};
+    NETWORK.edges.forEach((edge) => {
+      const change = changes.get(edge.id) || {};
+      const lanes = change.lanes || edge.lanes;
+      const pavementKey = change.pavement || "good";
+      const freeFlowKmh = edge.free_flow_kmh * PAVEMENT_SPEED_MULTIPLIER[pavementKey];
+      const volumeVph = volumeByEdge[edge.id];
+      const travelTimeS = bprTravelTimeS(edge.length_m, freeFlowKmh, lanes, volumeVph);
+      states[edge.id] = {
+        edge, lanes, freeFlowKmh, volumeVph, travelTimeS,
+        freeFlowTimeS: freeFlowTimeS(edge.length_m, freeFlowKmh),
+        vc: vcRatio(volumeVph, lanes)
+      };
+    });
+    return states;
+  }
+
+  function buildAdjacency(states) {
+    const adj = {};
+    NETWORK.nodes.forEach((n) => { adj[n.id] = []; });
+    Object.values(states).forEach((s) => {
+      adj[s.edge.u].push({ to: s.edge.v, edgeId: s.edge.id, weight: s.travelTimeS });
+      adj[s.edge.v].push({ to: s.edge.u, edgeId: s.edge.id, weight: s.travelTimeS });
+    });
+    return adj;
+  }
+
+  // Small hand-rolled Dijkstra — the network has ~23 nodes, no need for a library.
+  function dijkstra(states, source, target) {
+    const adj = buildAdjacency(states);
+    const dist = {}; const prevNode = {}; const prevEdge = {};
+    NETWORK.nodes.forEach((n) => { dist[n.id] = Infinity; });
+    dist[source] = 0;
+    const visited = new Set();
+    while (visited.size < NETWORK.nodes.length) {
+      let u = null, best = Infinity;
+      for (const n of NETWORK.nodes) {
+        if (!visited.has(n.id) && dist[n.id] < best) { best = dist[n.id]; u = n.id; }
+      }
+      if (u === null) break;
+      visited.add(u);
+      if (u === target) break;
+      adj[u].forEach(({ to, edgeId, weight }) => {
+        const alt = dist[u] + weight;
+        if (alt < dist[to]) { dist[to] = alt; prevNode[to] = u; prevEdge[to] = edgeId; }
+      });
+    }
+    if (dist[target] === Infinity) return null;
+    const pathNodes = [target];
+    const pathEdges = [];
+    let cur = target;
+    while (cur !== source) {
+      pathEdges.unshift(prevEdge[cur]);
+      cur = prevNode[cur];
+      pathNodes.unshift(cur);
+    }
+    const totalLengthM = pathEdges.reduce((sum, eid) => sum + EDGE_BY_ID[eid].length_m, 0);
+    return { pathNodes, pathEdges, totalTimeS: dist[target], totalLengthM };
+  }
+
+  function totalNetworkTravelTimeVehHours(states) {
+    let totalVehSeconds = 0;
+    Object.values(states).forEach((s) => { totalVehSeconds += s.travelTimeS * s.volumeVph; });
+    return totalVehSeconds / 3600;
+  }
+
+  // ---------- app state ----------
+  let currentChanges = new Map(); // edgeId -> { lanes, pavement, rerouteFraction }
+  let baselineStates = applyChanges(currentChanges);
+  let currentRoute = null; // dijkstra result against baselineStates (pre-change) — the "before"
+  let latestStates = baselineStates;
+  let latestRoute = null; // against latestStates — the "after" (same as currentRoute if no changes applied)
+
+  function formatMinSec(totalSeconds) {
+    const m = Math.floor(totalSeconds / 60);
+    const s = Math.round(totalSeconds % 60);
+    return `${m}m ${s}s`;
+  }
+  function formatKm(meters) { return (meters / 1000).toFixed(1) + " km"; }
+  function vcColor(vc) {
+    if (vc < 0.6) return "#0ca30c";
+    if (vc < 0.85) return "#a172dd";
+    if (vc < 1.0) return "#7a3fcf";
+    return "#4a148c";
+  }
+  function vcLabel(vc) {
+    if (vc < 0.6) return "Free-flowing";
+    if (vc < 0.85) return "Busy";
+    if (vc < 1.0) return "Near capacity";
+    return "Over capacity";
+  }
+
+  // ---------- populate From/To ----------
+  const fromSelect = document.getElementById("fromSelect");
+  const toSelect = document.getElementById("toSelect");
+  const sortedNodes = [...NETWORK.nodes].sort((a, b) => a.name.localeCompare(b.name));
+  sortedNodes.forEach((n) => {
+    fromSelect.innerHTML += `<option value="${n.id}">${n.name}</option>`;
+    toSelect.innerHTML += `<option value="${n.id}">${n.name}</option>`;
+  });
+  fromSelect.value = "electronic_city";
+  toSelect.value = "whitefield";
+
+  function computeAndRenderRoute() {
+    currentChanges = new Map();
+    baselineStates = applyChanges(currentChanges);
+    const source = fromSelect.value, target = toSelect.value;
+    if (source === target) {
+      document.getElementById("routeSummary").innerHTML = `<p style="color:var(--risk-extreme);">Pick two different junctions.</p>`;
+      document.getElementById("improveCard").hidden = true;
+      document.getElementById("resultsCard").hidden = true;
+      currentRoute = null;
+      return;
+    }
+    currentRoute = dijkstra(baselineStates, source, target);
+    latestStates = baselineStates;
+    latestRoute = currentRoute;
+    renderRouteSummary(currentRoute, baselineStates);
+    renderEdgeCards(currentRoute, baselineStates);
+    document.getElementById("resultsCard").hidden = true;
+    drawRouteOn3DMap(currentRoute);
+  }
+
+  function renderRouteSummary(route, states) {
+    const el = document.getElementById("routeSummary");
+    if (!route) { el.innerHTML = `<p>No path found between these two junctions in this skeleton.</p>`; return; }
+    el.innerHTML =
+      `<div class="big">${formatMinSec(route.totalTimeS)}</div>` +
+      `<div>${formatKm(route.totalLengthM)} · ${route.pathEdges.length} corridor${route.pathEdges.length === 1 ? "" : "s"}</div>` +
+      `<ul class="route-steps">${route.pathEdges.map((eid) => {
+        const s = states[eid];
+        return `<li>${s.edge.name} <span style="color:${vcColor(s.vc)};font-weight:700;">(${vcLabel(s.vc)})</span></li>`;
+      }).join("")}</ul>`;
+  }
+
+  function edgeControlRowHtml(edgeId, current) {
+    const edge = EDGE_BY_ID[edgeId];
+    const hasAlt = edge.reroute_alternates.length > 0;
+    return `
+      <div class="edge-card" data-edge-id="${edgeId}">
+        <div class="edge-name">${edge.name}</div>
+        <div class="edge-meta">${formatKm(edge.length_m)} · baseline ${edge.lanes} lanes @ ${edge.free_flow_kmh} km/h</div>
+        <label>Lanes (currently ${current.lanes})</label>
+        <input type="range" class="laneInput" min="${Math.max(2, edge.lanes - 2)}" max="${edge.lanes + 6}" step="1" value="${current.lanes}">
+        <label>Pavement / materials</label>
+        <select class="pavementInput">
+          ${Object.keys(PAVEMENT_SPEED_MULTIPLIER).map((k) => `<option value="${k}" ${((current.pavement || "good") === k) ? "selected" : ""}>${k[0].toUpperCase() + k.slice(1)}</option>`).join("")}
+        </select>
+        ${hasAlt ? `
+          <label>Festival/closure reroute: divert ${(Math.round((current.rerouteFraction || 0) * 100))}% to ${edge.reroute_alternates.map((a) => EDGE_BY_ID[a].name).join(" / ")}</label>
+          <input type="range" class="rerouteInput" min="0" max="100" step="5" value="${Math.round((current.rerouteFraction || 0) * 100)}">
+        ` : `<p class="edge-meta" style="margin-top:8px;">No parallel corridor in this skeleton to reroute onto.</p>`}
+      </div>`;
+  }
+
+  function renderEdgeCards(route, states) {
+    if (!route) return;
+    const wrap = document.getElementById("edgeCards");
+    wrap.innerHTML = route.pathEdges.map((eid) => edgeControlRowHtml(eid, { lanes: EDGE_BY_ID[eid].lanes, pavement: "good", rerouteFraction: 0 })).join("");
+    document.getElementById("improveCard").hidden = false;
+
+    wrap.querySelectorAll(".edge-card").forEach((card) => {
+      const edgeId = card.dataset.edgeId;
+      const laneInput = card.querySelector(".laneInput");
+      const pavementInput = card.querySelector(".pavementInput");
+      const rerouteInput = card.querySelector(".rerouteInput");
+      const laneLabel = card.querySelector("label");
+      laneInput.addEventListener("input", () => {
+        laneLabel.textContent = `Lanes (currently ${laneInput.value})`;
+        setChange(edgeId, { lanes: parseInt(laneInput.value, 10) });
+      });
+      pavementInput.addEventListener("change", () => setChange(edgeId, { pavement: pavementInput.value }));
+      if (rerouteInput) {
+        const rerouteLabel = card.querySelectorAll("label")[2];
+        rerouteInput.addEventListener("input", () => {
+          const frac = parseInt(rerouteInput.value, 10) / 100;
+          const edge = EDGE_BY_ID[edgeId];
+          rerouteLabel.textContent = `Festival/closure reroute: divert ${rerouteInput.value}% to ${edge.reroute_alternates.map((a) => EDGE_BY_ID[a].name).join(" / ")}`;
+          setChange(edgeId, { rerouteFraction: frac });
+        });
+      }
+    });
+  }
+
+  function setChange(edgeId, partial) {
+    const existing = currentChanges.get(edgeId) || {};
+    currentChanges.set(edgeId, { ...existing, ...partial });
+  }
+
+  function recalculate() {
+    if (!currentRoute) return;
+    latestStates = applyChanges(currentChanges);
+    latestRoute = dijkstra(latestStates, fromSelect.value, toSelect.value);
+    renderResults();
+    drawRouteOn3DMap(latestRoute, true);
+  }
+
+  function renderResults() {
+    const before = currentRoute, after = latestRoute;
+    const resultsCard = document.getElementById("resultsCard");
+    resultsCard.hidden = false;
+    if (!after) {
+      document.getElementById("compareSummary").innerHTML = `<div>No path found with these changes.</div>`;
+      document.getElementById("recoText").innerHTML = "";
+      return;
+    }
+    const pct = ((after.totalTimeS - before.totalTimeS) / before.totalTimeS) * 100;
+    const netBefore = totalNetworkTravelTimeVehHours(baselineStates);
+    const netAfter = totalNetworkTravelTimeVehHours(latestStates);
+    const netPct = ((netAfter - netBefore) / netBefore) * 100;
+    const pctClass = pct <= 0 ? "good" : "bad";
+    const netPctClass = netPct <= 0 ? "good" : "bad";
+
+    document.getElementById("compareSummary").innerHTML =
+      `<div><div class="label">Before</div><div class="value">${formatMinSec(before.totalTimeS)}</div></div>` +
+      `<div><div class="label">After</div><div class="value">${formatMinSec(after.totalTimeS)}</div></div>` +
+      `<div><div class="label">Route travel time</div><div class="value ${pctClass}">${pct > 0 ? "+" : ""}${pct.toFixed(1)}%</div></div>` +
+      `<div><div class="label">Network-wide travel time</div><div class="value ${netPctClass}">${netPct > 0 ? "+" : ""}${netPct.toFixed(2)}%</div></div>`;
+
+    // Identify the actual bottleneck on the AFTER path (highest v/c ratio) so the
+    // recommendation names the real constraint, not just whatever the user tweaked.
+    const afterEdgeStates = after.pathEdges.map((eid) => latestStates[eid]);
+    const bottleneck = afterEdgeStates.reduce((worst, s) => (s.vc > worst.vc ? s : worst), afterEdgeStates[0]);
+
+    const bullets = [];
+    bullets.push(pct < -0.5
+      ? `This route is predicted ${Math.abs(pct).toFixed(1)}% faster with these changes (${formatMinSec(before.totalTimeS)} → ${formatMinSec(after.totalTimeS)}).`
+      : pct > 0.5
+        ? `This route is predicted ${pct.toFixed(1)}% slower with these changes — rerouting volume onto an alternate can overload it instead (check the alternate's v/c ratio below).`
+        : `These changes make little predicted difference to this specific route (${pct.toFixed(1)}%).`);
+    bullets.push(`The remaining bottleneck on the route is <strong>${bottleneck.edge.name}</strong> at a ${bottleneck.vc.toFixed(2)} volume/capacity ratio (${vcLabel(bottleneck.vc)}) — further improvement here would help more than elsewhere on this path.`);
+    bullets.push(netPct < -0.05
+      ? `Network-wide predicted total travel time also drops ${Math.abs(netPct).toFixed(2)}% — this change looks like a net win, not just a local one.`
+      : netPct > 0.05
+        ? `Network-wide predicted total travel time rises ${netPct.toFixed(2)}% — the benefit here is coming partly at another corridor's expense (classic effect of rerouting/induced demand, not modeled in full here).`
+        : `Network-wide predicted total travel time is essentially unchanged — this looks like a fairly self-contained, low-side-effect change.`);
+    bullets.push(`As with the rest of this tool: these are BPR-heuristic predictions from an illustrative network, not a validated traffic study — commission a real volume count and (for anything structural, like widening) a proper engineering study before acting on this.`);
+    document.getElementById("recoText").innerHTML = bullets.map((b) => `<li>${b}</li>`).join("");
+  }
+
+  document.getElementById("driveBtn").addEventListener("click", () => {
+    if (!currentRoute) computeAndRenderRoute();
+    startDriveAnimation(latestRoute || currentRoute, latestStates);
+  });
+  document.getElementById("recalcBtn").addEventListener("click", recalculate);
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    currentChanges = new Map();
+    document.getElementById("resultsCard").hidden = true;
+    renderEdgeCards(currentRoute, baselineStates);
+    latestStates = baselineStates;
+    latestRoute = currentRoute;
+    drawRouteOn3DMap(currentRoute);
+  });
+  fromSelect.addEventListener("change", computeAndRenderRoute);
+  toSelect.addEventListener("change", computeAndRenderRoute);
+
+  // ---------- 3D map ----------
+  let Map3DElementCtor, Marker3DElementCtor, Polyline3DElementCtor;
+  let map3d = null;
+  let routePolyline = null;
+  let carMarker = null;
+  let map3dReady = false;
+
+  function pathToCoords(route) {
+    return route.pathNodes.map((nid) => {
+      const n = NODE_BY_ID[nid];
+      return { lat: n.lat, lng: n.lon, altitude: 40 };
+    });
+  }
+
+  function drawRouteOn3DMap(route, isAfter) {
+    if (!map3dReady || !route) return;
+    if (routePolyline) { routePolyline.remove(); routePolyline = null; }
+    const coords = pathToCoords(route);
+    routePolyline = new Polyline3DElementCtor({
+      coordinates: coords,
+      strokeColor: isAfter ? "#0ca30c" : "#7a3fcf",
+      strokeWidth: 10,
+      altitudeMode: "RELATIVE_TO_GROUND",
+      extruded: false,
+    });
+    map3d.append(routePolyline);
+
+    if (!carMarker) {
+      carMarker = new Marker3DElementCtor({
+        position: coords[0],
+        altitudeMode: "RELATIVE_TO_GROUND",
+      });
+      // Marker3DElement only accepts an HTMLTemplateElement (or PinElement)
+      // as slotted content — a plain <div> is silently rejected.
+      const template = document.createElement("template");
+      const glyph = document.createElement("div");
+      glyph.textContent = "🚗";
+      glyph.style.fontSize = "28px";
+      template.content.appendChild(glyph);
+      carMarker.append(template);
+      map3d.append(carMarker);
+    } else {
+      carMarker.position = coords[0];
+    }
+
+    const bounds = coords.reduce(
+      (b, c) => ({
+        lat: [Math.min(b.lat[0], c.lat), Math.max(b.lat[1], c.lat)],
+        lng: [Math.min(b.lng[0], c.lng), Math.max(b.lng[1], c.lng)],
+      }),
+      { lat: [coords[0].lat, coords[0].lat], lng: [coords[0].lng, coords[0].lng] }
+    );
+    map3d.center = { lat: (bounds.lat[0] + bounds.lat[1]) / 2, lng: (bounds.lng[0] + bounds.lng[1]) / 2, altitude: 300 };
+    map3d.range = 6000;
+    map3d.tilt = 55;
+  }
+
+  let driveAnimationHandle = null;
+  function startDriveAnimation(route, states) {
+    if (!route) return;
+    if (!map3dReady) { alert("3D map isn't available — see the note over the map area. Route/impact numbers above still work."); return; }
+    if (driveAnimationHandle) cancelAnimationFrame(driveAnimationHandle);
+
+    const PLAYBACK_SECONDS = Math.min(35, Math.max(8, route.totalTimeS / 60)); // compress: ~1 played second per real minute, clamped
+    const coords = pathToCoords(route);
+    const segTimes = route.pathEdges.map((eid) => states[eid].travelTimeS);
+    const totalTime = segTimes.reduce((a, b) => a + b, 0) || 1;
+    const cumFractions = [0];
+    segTimes.forEach((t) => cumFractions.push(cumFractions[cumFractions.length - 1] + t / totalTime));
+
+    const startTs = performance.now();
+    let lastCameraUpdate = 0;
+
+    function frame(now) {
+      const elapsed = (now - startTs) / 1000;
+      const progress = Math.min(1, elapsed / PLAYBACK_SECONDS);
+
+      let segIdx = 0;
+      while (segIdx < cumFractions.length - 2 && progress > cumFractions[segIdx + 1]) segIdx++;
+      const segStart = cumFractions[segIdx], segEnd = cumFractions[segIdx + 1];
+      const segProgress = segEnd > segStart ? (progress - segStart) / (segEnd - segStart) : 1;
+      const a = coords[segIdx], b = coords[segIdx + 1];
+      const lat = a.lat + (b.lat - a.lat) * segProgress;
+      const lng = a.lng + (b.lng - a.lng) * segProgress;
+      if (carMarker) carMarker.position = { lat, lng, altitude: 40 };
+
+      if (now - lastCameraUpdate > 250) {
+        map3d.center = { lat, lng, altitude: 200 };
+        lastCameraUpdate = now;
+      }
+
+      if (progress < 1) {
+        driveAnimationHandle = requestAnimationFrame(frame);
+      }
+    }
+    driveAnimationHandle = requestAnimationFrame(frame);
+  }
+
+  // ---------- boot ----------
+  // Route/BPR numbers on the left don't depend on the 3D map at all, so
+  // they're computed immediately regardless of whether Photorealistic 3D
+  // Tiles load successfully — only drawRouteOn3DMap()/startDriveAnimation()
+  // are gated on map3dReady.
+  computeAndRenderRoute();
+
+  function showMapFallback() {
+    document.getElementById("map3d-fallback").style.display = "flex";
+  }
+
+  window.initMap3D = async function () {
+    try {
+      const lib = await google.maps.importLibrary("maps3d");
+      Map3DElementCtor = lib.Map3DElement;
+      Marker3DElementCtor = lib.Marker3DElement;
+      Polyline3DElementCtor = lib.Polyline3DElement;
+
+      map3d = new Map3DElementCtor({
+        center: { lat: 12.9716, lng: 77.5946, altitude: 300 },
+        range: 12000,
+        tilt: 55,
+        heading: 0,
+        mode: "HYBRID",
+      });
+
+      let settled = false;
+      map3d.addEventListener("gmp-error", (e) => {
+        console.error("3D map load error:", e);
+        if (!settled) { settled = true; showMapFallback(); }
+      });
+      map3d.addEventListener("gmp-steadystate", () => {
+        if (!settled) {
+          settled = true;
+          map3dReady = true;
+          if (currentRoute) drawRouteOn3DMap(currentRoute);
+        }
+      });
+      // Defensive timeout: some load failures land inside the custom
+      // element without firing gmp-error at all (seen in local testing).
+      setTimeout(() => { if (!settled) { settled = true; showMapFallback(); } }, 8000);
+
+      document.getElementById("map3d").appendChild(map3d);
+    } catch (err) {
+      console.error("3D map failed to load:", err);
+      showMapFallback();
+    }
+  };
+
+  if (!GOOGLE_MAPS_API_KEY) {
+    document.getElementById("setup-banner").style.display = "flex";
+  } else {
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&v=alpha&callback=initMap3D`;
+    script.async = true;
+    document.head.appendChild(script);
+  }
+</script>
+</body>
+</html>
