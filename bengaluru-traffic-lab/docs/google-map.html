@@ -173,6 +173,55 @@
   }
   .hour-chip.low { background: #eef8ee; color: #0ca30c; }
 
+  /* ---- Turn Shift Recommendations tab ---- */
+  #turnShiftView { flex-direction: column; overflow-y: auto; padding: 24px 32px; gap: 24px; max-width: 1150px; }
+  .warn-card {
+    background: #fef3dc; border: 1px solid #f0d999; border-radius: 10px; padding: 14px 18px;
+    font-size: 12.5px; color: #6b4e00; line-height: 1.55;
+  }
+  .candidate-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .candidate-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border: 1px solid var(--hairline); border-radius: 8px;
+  }
+  .candidate-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--risk-high); flex-shrink: 0; }
+  .candidate-name { font-size: 13px; font-weight: 600; flex: 1; }
+  .candidate-meta { font-size: 11.5px; color: var(--ink-secondary); }
+  .candidate-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    padding: 2px 8px; border-radius: 999px; color: #fff; white-space: nowrap;
+  }
+  .ts-maps { display: flex; gap: 18px; flex-wrap: wrap; }
+  .ts-map-col { flex: 1; min-width: 320px; }
+  .ts-map-heading { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .hypothetical-badge {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em; color: #a15c00; background: #fef3dc;
+    border-radius: 999px; padding: 3px 8px;
+  }
+  .ts-map-wrap {
+    position: relative; height: 380px; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--hairline); background: #f2f1ee;
+  }
+  .ts-map { position: absolute; inset: 0; }
+  .ts-map-caption { font-size: 11.5px; color: var(--ink-secondary); margin-top: 6px; line-height: 1.4; }
+
+  .compare-summary {
+    display: flex; gap: 24px; flex-wrap: wrap; padding: 12px 14px; background: #f4eefc;
+    border-radius: 8px; border-left: 3px solid var(--risk-high); margin-top: 4px;
+  }
+  .compare-summary .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
+  .compare-summary .value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .compare-row { margin-top: 16px; }
+  .compare-row-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin-bottom: 4px; }
+  .compare-row-top .pct { font-weight: 700; color: #0ca30c; }
+  .compare-bar-track { height: 14px; border-radius: 4px; background: #f2f1ee; overflow: hidden; margin-bottom: 3px; }
+  .compare-bar-fill { height: 100%; border-radius: 4px; }
+  .compare-bar-fill.before { background: var(--risk-extreme); }
+  .compare-bar-fill.after { background: #0ca30c; }
+  .compare-legend { display: flex; gap: 16px; font-size: 11px; color: var(--ink-secondary); margin-top: 10px; }
+  .compare-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
   #map { position: absolute; inset: 0; }
   #setup-banner {
     background: #fef3dc; border-bottom: 1px solid #f0d999; padding: 10px 20px;
@@ -235,6 +284,7 @@
 <div id="tabs">
   <button class="tab-btn is-active" data-tab="map">Map</button>
   <button class="tab-btn" data-tab="report">Report</button>
+  <button class="tab-btn" data-tab="turnshift">Turn Shift Recommendations</button>
 </div>
 
 <div id="setup-banner">
@@ -353,12 +403,107 @@
         commute pattern as everyone else (that's expected, not a bug) — step to one of its flagged
         days via the header stepper to see its own type-specific pattern stand out.
       </p>
+      <input type="text" id="zonesSearchBox" placeholder="Search this table by name…"
+        style="width:100%; margin-top:12px; padding:8px 10px; border:1px solid var(--hairline); border-radius:6px; font-size:13px;">
       <div class="zones-table-wrap">
         <table class="zones-table">
-          <thead><tr><th>Landmark</th><th>Type</th><th>Busiest hours</th><th>Quietest hours</th></tr></thead>
+          <thead><tr><th>Landmark</th><th>Type</th><th>Busiest hours</th><th>Quietest hours</th><th></th></tr></thead>
           <tbody id="zonesTableBody"></tbody>
         </table>
       </div>
+    </div>
+
+    <div class="report-card">
+      <h2 style="margin:0 0 4px; font-size:14px;">Add a location not in this list</h2>
+      <p class="report-note" style="margin-top:2px;">
+        Drop a pin on the Map tab (or type coordinates directly) to add your own location — it's
+        computed with the same weekly/festival rules as the built-in 17 and joins every view (ranking,
+        maps, zone timelines) immediately. Stored only in <strong>this browser's local storage</strong> —
+        not shared with anyone else, not synced anywhere, gone if you clear browser data.
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; align-items:flex-end;">
+        <div style="flex:1; min-width:160px;">
+          <label style="font-size:11px; color:var(--ink-muted); display:block; margin-bottom:3px;">Name</label>
+          <input type="text" id="newLocName" placeholder="e.g. Richmond Town Church" style="width:100%; padding:7px 9px; border:1px solid var(--hairline); border-radius:6px; font-size:13px;">
+        </div>
+        <div>
+          <label style="font-size:11px; color:var(--ink-muted); display:block; margin-bottom:3px;">Type</label>
+          <select id="newLocKind" style="padding:7px 9px; border:1px solid var(--hairline); border-radius:6px; font-size:13px;">
+            <option value="temple_generic">Temple (generic)</option>
+            <option value="shani_temple">Shani temple</option>
+            <option value="hanuman_temple">Hanuman temple</option>
+            <option value="masjid">Masjid</option>
+            <option value="church">Church</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px; color:var(--ink-muted); display:block; margin-bottom:3px;">Latitude</label>
+          <input type="number" step="0.0001" id="newLocLat" placeholder="12.97" style="width:100px; padding:7px 9px; border:1px solid var(--hairline); border-radius:6px; font-size:13px;">
+        </div>
+        <div>
+          <label style="font-size:11px; color:var(--ink-muted); display:block; margin-bottom:3px;">Longitude</label>
+          <input type="number" step="0.0001" id="newLocLon" placeholder="77.59" style="width:100px; padding:7px 9px; border:1px solid var(--hairline); border-radius:6px; font-size:13px;">
+        </div>
+        <button type="button" id="pickOnMapBtn" style="padding:8px 12px; border:1px solid var(--hairline); border-radius:6px; background:#fff; font-size:13px; cursor:pointer;">📍 Pick on map</button>
+        <button type="button" id="addLocationBtn" style="padding:8px 14px; border:none; border-radius:6px; background:var(--risk-high); color:#fff; font-size:13px; font-weight:600; cursor:pointer;">Add to table</button>
+      </div>
+      <p class="report-note" id="addLocationStatus" style="margin-top:10px;"></p>
+    </div>
+  </div>
+</div>
+
+<div id="turnShiftView" class="view" hidden>
+  <div class="warn-card">
+    <strong>What this tab actually is:</strong> a triage aid, not a validated engineering result.
+    There's no real road-junction geometry or turning-movement count behind this — the "after" map
+    scales a reduction (20% at High, 30% at Extreme predicted severity) and a suggested median-opening
+    offset (150–200m / 200–300m) off our own predicted-severity rank, since that's the only signal
+    available here; both ranges come from the published U-turn/median-relocation studies cited in
+    <code>docs/RESEARCH.md</code>, which also report bigger benefits where baseline congestion is
+    worse — which is the actual scientific basis for tiering by severity at all.
+    <strong>Recommended next step for any ticked location: commission a real turning-movement/volume
+    count at that junction (an ITE-style warrant study)</strong> before changing anything — this tool's
+    job is to prioritize where that study's time goes, not to replace it.
+  </div>
+
+  <div class="report-card">
+    <h2 style="margin:0 0 4px; font-size:14px;">Candidate locations for turning-movement changes</h2>
+    <p class="report-note" style="margin-top:2px;">
+      Locations currently at high/extreme predicted risk somewhere in the loaded window (same
+      condition as the Map tab's turning-movement advisory). Tick any to apply the illustrative
+      reduction below and compare.
+    </p>
+    <div class="candidate-list" id="candidateList"></div>
+  </div>
+
+  <div class="report-card">
+    <h2 style="margin:0 0 4px; font-size:14px;">Live traffic vs. suggested-change scenario</h2>
+    <p class="report-note" style="margin-top:2px;">
+      Left: Google's real live traffic, right now. Right: our own predicted layer only (Google traffic
+      can't be simulated for a hypothetical scenario) with any ticked locations' congestion intensity
+      reduced by the illustrative assumption above. Both reflect the day selected on the Map tab.
+    </p>
+    <div class="ts-maps">
+      <div class="ts-map-col">
+        <div class="ts-map-heading">Live traffic (real, now)</div>
+        <div class="ts-map-wrap"><div class="ts-map" id="tsBeforeMap"></div></div>
+        <p class="ts-map-caption">Google's actual current traffic conditions + our unmodified predicted-risk markers.</p>
+      </div>
+      <div class="ts-map-col">
+        <div class="ts-map-heading">With suggested changes <span class="hypothetical-badge">Hypothetical</span></div>
+        <div class="ts-map-wrap"><div class="ts-map" id="tsAfterMap"></div></div>
+        <p class="ts-map-caption">Our predicted-risk markers only, with ticked locations' intensity reduced by the illustrative assumption. Not Google data.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="report-card">
+    <h2 style="margin:0 0 4px; font-size:14px;">Predicted congestion change</h2>
+    <div class="compare-summary" id="compareSummary"></div>
+    <div id="compareRows"></div>
+    <div class="compare-legend">
+      <span><span class="swatch" style="background:var(--risk-extreme)"></span>Before</span>
+      <span><span class="swatch" style="background:#0ca30c"></span>After (hypothetical)</span>
     </div>
   </div>
 </div>
@@ -403,6 +548,113 @@
   const TODAY_INDEX = RISK.todayIndex;
   let dayIndex = TODAY_INDEX;
   let selectedLandmark = null;
+
+  // ---------- JS port of traffic_lab.calendar_rules ----------
+  // A user-added custom landmark has no precomputed cells in risk-data
+  // (that JSON was generated once, server-side, from the Python package).
+  // To give it real cells rather than "no data", this replicates
+  // calendar_rules.py's weekly-pattern + festival logic in JS. Keep this
+  // in sync with that file and with data/festivals.sample.yaml by hand —
+  // there's no build step here to share one source of truth across
+  // Python and this static page.
+  const WEEKLY_PEAK_DAYS_JS = {
+    masjid: ["Friday"],
+    hanuman_temple: ["Tuesday", "Saturday"],
+    shani_temple: ["Saturday"],
+    church: ["Sunday"],
+    gurdwara: ["Sunday"],
+    temple_generic: ["Friday"]
+  };
+  // Mirrors data/festivals.sample.yaml — same "illustrative, verify" caveat.
+  const FESTIVALS_JS = [
+    { name: "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY", start: "2026-09-25", end: "2026-09-27", severity: "extreme", kinds: [] },
+    { name: "Karaga festival — EXAMPLE DATE, VERIFY", start: "2026-04-01", end: "2026-04-02", severity: "high", kinds: ["temple_generic"] },
+    { name: "Ramzan (Eid al-Fitr) — EXAMPLE DATE, VERIFY", start: "2026-03-20", end: "2026-03-20", severity: "high", kinds: ["masjid"] },
+    { name: "Christmas Eve / Midnight Mass — EXAMPLE DATE, VERIFY", start: "2026-12-24", end: "2026-12-25", severity: "high", kinds: ["church"] }
+  ];
+  function congestionRiskForDateJS(kind, dateStr) {
+    const rank = { none: 0, elevated: 1, high: 2, extreme: 3 };
+    const weekday = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
+    let level = "none";
+    const reasons = [];
+    if ((WEEKLY_PEAK_DAYS_JS[kind] || []).includes(weekday)) {
+      level = "elevated";
+      reasons.push(`Weekly peak day for ${kind} (${weekday})`);
+    }
+    FESTIVALS_JS.forEach((f) => {
+      const inRange = dateStr >= f.start && dateStr <= f.end;
+      const applies = f.kinds.length === 0 || f.kinds.includes(kind);
+      if (inRange && applies) {
+        if (rank[f.severity] > rank[level]) level = f.severity;
+        reasons.push(`${f.name} (${f.severity})`);
+      }
+    });
+    return { level, reasons };
+  }
+  function generateCellsForKind(kind) {
+    return DATES.map((dateStr) => ({ dateStr, ...congestionRiskForDateJS(kind, dateStr) }))
+      .map(({ dateStr, level, reasons }) => ({ date: dateStr, level, reasons }));
+  }
+
+  // ---------- user-added custom locations (this browser only) ----------
+  const CUSTOM_STORAGE_KEY = "trafficLabCustomLandmarks_v1";
+  const customLandmarkNames = new Set();
+
+  function persistCustomLandmarks() {
+    try {
+      const data = LANDMARKS.filter((l) => customLandmarkNames.has(l.name))
+        .map((l) => ({ name: l.name, kind: l.kind, lat: l.lat, lon: l.lon, radius_m: l.radius_m }));
+      localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) { /* storage unavailable (private window, blocked, etc.) — silently skip */ }
+  }
+
+  function loadCustomLandmarksFromStorage() {
+    try {
+      const raw = localStorage.getItem(CUSTOM_STORAGE_KEY);
+      if (!raw) return;
+      JSON.parse(raw).forEach((entry) => {
+        LANDMARKS.push(entry);
+        RISK.landmarks.push({ name: entry.name, cells: generateCellsForKind(entry.kind) });
+        customLandmarkNames.add(entry.name);
+      });
+    } catch (e) { /* corrupted or unavailable storage — start clean */ }
+  }
+  loadCustomLandmarksFromStorage();
+
+  function refreshAllViews() {
+    if (map) buildMainMapMarkers();
+    if (simMapReady) buildSimMarkers();
+    if (tsMapsReady) buildTurnShiftMarkers();
+    renderRanking();
+    render(); // cascades to renderZonesTable/renderCandidateList/renderSimMap/renderTurnShift*
+  }
+
+  function addCustomLandmark(name, kind, lat, lon) {
+    const trimmed = name.trim();
+    if (!trimmed) return "Enter a name for this location.";
+    if (LANDMARKS.some((l) => l.name === trimmed)) return "A location with that name already exists.";
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "Set a latitude and longitude (type them or use “Pick on map”).";
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return "Latitude/longitude look out of range.";
+
+    const landmark = { name: trimmed, kind, lat, lon, radius_m: 300 };
+    LANDMARKS.push(landmark);
+    RISK.landmarks.push({ name: trimmed, cells: generateCellsForKind(kind) });
+    customLandmarkNames.add(trimmed);
+    persistCustomLandmarks();
+    refreshAllViews();
+    return null; // success
+  }
+
+  function removeCustomLandmark(name) {
+    const li = LANDMARKS.findIndex((l) => l.name === name);
+    if (li >= 0) LANDMARKS.splice(li, 1);
+    const ri = RISK.landmarks.findIndex((l) => l.name === name);
+    if (ri >= 0) RISK.landmarks.splice(ri, 1);
+    customLandmarkNames.delete(name);
+    appliedChanges.delete(name);
+    persistCustomLandmarks();
+    refreshAllViews();
+  }
 
   const LEVEL_RANK = { none: 0, elevated: 1, high: 2, extreme: 3 };
   const MARKER_SCALE = { none: 7, elevated: 10, high: 13, extreme: 17 };
@@ -461,6 +713,35 @@
   let simMap, simTrafficLayer, simMapReady = false;
   const simMarkers = []; // { marker, circle, landmark }
   const markers = [];   // { marker, circle, landmark }
+
+  // ---------- Turn Shift Recommendations ----------
+  // Severity-tiered placeholder, not a computed engineering result. The
+  // cited ASCE/TRB median-U-turn literature (docs/RESEARCH.md) tests
+  // offsets in 100-300m increments and finds bigger benefits where
+  // baseline volume/congestion is worse — we have no real turning-
+  // movement count to plug into that, so severity (our own predicted
+  // rank, itself a heuristic) stands in as the only signal available,
+  // and the reduction/offset below scale with it. This is still an
+  // assumption, just a less flat one than a single constant. The
+  // scientifically correct next step for any candidate is a real
+  // turning-movement/volume count (an ITE-style warrant study) — this
+  // tool prioritizes WHERE to spend that study's time, it doesn't
+  // replace it.
+  const REDUCTION_BY_LEVEL = { none: 0, elevated: 0, high: 0.20, extreme: 0.30 };
+  const OFFSET_BY_LEVEL = { none: "—", elevated: "—", high: "150–200m", extreme: "200–300m" };
+  function rankToLevel(rank) {
+    if (rank < 0.5) return "none";
+    if (rank < 1.5) return "elevated";
+    if (rank < 2.5) return "high";
+    return "extreme";
+  }
+  function turnCandidates() {
+    return LANDMARKS.filter((l) => peakInfo(l.name).rank >= LEVEL_RANK.high);
+  }
+  const appliedChanges = new Set();
+  let tsBeforeMap, tsAfterMap, tsMapsReady = false;
+  const tsBeforeMarkers = [];
+  const tsAfterMarkers = [];
 
   function cellFor(landmarkName, idx) {
     const row = RISK.landmarks.find(l => l.name === landmarkName);
@@ -610,27 +891,16 @@
 
     renderZonesTable();
     if (simMapReady) renderSimMap();
+    renderCandidateList();
+    if (tsMapsReady) { renderTurnShiftMaps(); renderTurnShiftChart(); }
   }
 
-  window.initMap = function () {
-    map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 12.965, lng: 77.62 }, zoom: 11, mapId: undefined,
-      streetViewControl: false, fullscreenControl: false
-    });
-
-    window.__infoWindow = new google.maps.InfoWindow();
-
-    trafficLayer = new google.maps.TrafficLayer();
-    trafficLayer.setMap(map); // on by default — see the "live traffic layer" checkbox
-    document.getElementById("trafficToggle").addEventListener("change", (e) => {
-      trafficLayer.setMap(e.target.checked ? map : null);
-    });
-
-    // Fit to the actual spread of landmarks (now citywide — Electronic City
-    // to Yelahanka) rather than a guessed center/zoom.
-    const bounds = new google.maps.LatLngBounds();
-    LANDMARKS.forEach((l) => bounds.extend({ lat: l.lat, lng: l.lon }));
-    map.fitBounds(bounds, 40);
+  // Clears and rebuilds the main map's markers from the current LANDMARKS
+  // array — factored out so adding/removing a custom location can refresh
+  // it without duplicating the marker-creation/click-handler logic.
+  function buildMainMapMarkers() {
+    markers.forEach(({ marker, circle }) => { marker.setMap(null); circle.setMap(null); });
+    markers.length = 0;
 
     LANDMARKS.forEach((landmark) => {
       const position = { lat: landmark.lat, lng: landmark.lon };
@@ -669,13 +939,45 @@
 
       markers.push({ marker, circle, landmark });
     });
+  }
+
+  window.initMap = function () {
+    map = new google.maps.Map(document.getElementById("map"), {
+      center: { lat: 12.965, lng: 77.62 }, zoom: 11, mapId: undefined,
+      streetViewControl: false, fullscreenControl: false
+    });
+
+    window.__infoWindow = new google.maps.InfoWindow();
+
+    trafficLayer = new google.maps.TrafficLayer();
+    trafficLayer.setMap(map); // on by default — see the "live traffic layer" checkbox
+    document.getElementById("trafficToggle").addEventListener("change", (e) => {
+      trafficLayer.setMap(e.target.checked ? map : null);
+    });
+
+    // Fit to the actual spread of landmarks (now citywide — Electronic City
+    // to Yelahanka) rather than a guessed center/zoom.
+    const bounds = new google.maps.LatLngBounds();
+    LANDMARKS.forEach((l) => bounds.extend({ lat: l.lat, lng: l.lon }));
+    map.fitBounds(bounds, 40);
+
+    buildMainMapMarkers();
+
+    // Lets "Pick on map" (Zone Timelines' add-a-location form) capture a
+    // click anywhere on this map as the new location's coordinates.
+    map.addListener("click", (e) => {
+      if (typeof window.__onMapPick === "function") {
+        window.__onMapPick(e.latLng.lat(), e.latLng.lng());
+      }
+    });
 
     render();
 
-    // Safety net: if the user switched to the Time Simulation sub-tab
-    // before this async script finished loading, ensureSimMap() no-oped
-    // (no google.maps yet) — retry now that it's actually ready.
+    // Safety net: if the user switched to the Time Simulation sub-tab (or
+    // the Turn Shift tab) before this async script finished loading, the
+    // ensure*Map() call no-oped (no google.maps yet) — retry now.
     if (!document.getElementById("reportSimulate").hidden) ensureSimMap();
+    if (!document.getElementById("turnShiftView").hidden) ensureTurnShiftMaps();
   };
 
   document.getElementById("dayPrev").addEventListener("click", () => { if (dayIndex > 0) { dayIndex--; render(); } });
@@ -690,7 +992,21 @@
       document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("is-active", b === btn));
       document.getElementById("mapView").hidden = btn.dataset.tab !== "map";
       document.getElementById("reportView").hidden = btn.dataset.tab !== "report";
+      document.getElementById("turnShiftView").hidden = btn.dataset.tab !== "turnshift";
       if (btn.dataset.tab === "map" && map) google.maps.event.trigger(map, "resize");
+      if (btn.dataset.tab === "turnshift") {
+        ensureTurnShiftMaps();
+        // A map created (or shown) the instant its container becomes
+        // visible can read a stale, still-collapsed size — trigger resize
+        // and re-fit bounds on the next frame so it actually fills the box.
+        requestAnimationFrame(() => {
+          const candidates = turnCandidates();
+          const bounds = new google.maps.LatLngBounds();
+          (candidates.length ? candidates : LANDMARKS).forEach((l) => bounds.extend({ lat: l.lat, lng: l.lon }));
+          if (tsBeforeMap) { google.maps.event.trigger(tsBeforeMap, "resize"); tsBeforeMap.fitBounds(bounds, 30); }
+          if (tsAfterMap) { google.maps.event.trigger(tsAfterMap, "resize"); tsAfterMap.fitBounds(bounds, 30); }
+        });
+      }
     });
   });
 
@@ -767,6 +1083,17 @@
     return parseInt(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false }).format(new Date()), 10);
   }
 
+  function buildSimMarkers() {
+    simMarkers.forEach(({ marker, circle }) => { marker.setMap(null); circle.setMap(null); });
+    simMarkers.length = 0;
+    LANDMARKS.forEach((landmark) => {
+      const position = { lat: landmark.lat, lng: landmark.lon };
+      const circle = new google.maps.Circle({ map: simMap, center: position, radius: landmark.radius_m, strokeWeight: 1 });
+      const marker = new google.maps.Marker({ map: simMap, position, title: landmark.name, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9 } });
+      simMarkers.push({ marker, circle, landmark });
+    });
+  }
+
   function ensureSimMap() {
     if (simMapReady || typeof google === "undefined" || !google.maps) return;
     simMap = new google.maps.Map(document.getElementById("simMap"), {
@@ -779,12 +1106,7 @@
 
     simTrafficLayer = new google.maps.TrafficLayer();
 
-    LANDMARKS.forEach((landmark) => {
-      const position = { lat: landmark.lat, lng: landmark.lon };
-      const circle = new google.maps.Circle({ map: simMap, center: position, radius: landmark.radius_m, strokeWeight: 1 });
-      const marker = new google.maps.Marker({ map: simMap, position, title: landmark.name, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9 } });
-      simMarkers.push({ marker, circle, landmark });
-    });
+    buildSimMarkers();
 
     simMapReady = true;
     renderSimMap();
@@ -856,20 +1178,249 @@
     const tbody = document.getElementById("zonesTableBody");
     if (!tbody) return;
     tbody.innerHTML = "";
-    LANDMARKS.forEach((landmark) => {
+    const searchBox = document.getElementById("zonesSearchBox");
+    const query = (searchBox && searchBox.value || "").trim().toLowerCase();
+    const rows = LANDMARKS.filter((l) => !query || l.name.toLowerCase().includes(query));
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--ink-muted);">No location matches "${query}".</td></tr>`;
+      return;
+    }
+
+    rows.forEach((landmark) => {
       const { top, bottom } = topAndBottomHours(landmark, dayIndex, 3);
       const tr = document.createElement("tr");
       const busyChips = top.map((t) => `<span class="hour-chip">${formatHour12(t.hour)}</span>`).join("");
       const quietChips = bottom.map((t) => `<span class="hour-chip low">${formatHour12(t.hour)}</span>`).join("");
+      const isCustom = customLandmarkNames.has(landmark.name);
+      const nameCell = landmark.name.replace(/ \(.*\)$/, "") + (isCustom ? ' <span class="candidate-meta" style="color:var(--risk-high);">(custom)</span>' : "");
       tr.innerHTML =
-        `<td>${landmark.name.replace(/ \(.*\)$/, "")}</td>` +
+        `<td>${nameCell}</td>` +
         `<td>${KIND_LABEL[landmark.kind] || landmark.kind}</td>` +
         `<td>${busyChips}</td>` +
-        `<td>${quietChips}</td>`;
+        `<td>${quietChips}</td>` +
+        `<td>${isCustom ? `<button type="button" class="remove-loc-btn" data-name="${landmark.name.replace(/"/g, "&quot;")}" style="border:none;background:none;color:var(--ink-muted);cursor:pointer;font-size:15px;">×</button>` : ""}</td>`;
       tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".remove-loc-btn").forEach((btn) => {
+      btn.addEventListener("click", () => removeCustomLandmark(btn.dataset.name));
     });
   }
   renderZonesTable();
+
+  const zonesSearchBoxEl = document.getElementById("zonesSearchBox");
+  if (zonesSearchBoxEl) zonesSearchBoxEl.addEventListener("input", renderZonesTable);
+
+  // ---------- add-a-location form ----------
+  const pickOnMapBtn = document.getElementById("pickOnMapBtn");
+  const addLocationBtn = document.getElementById("addLocationBtn");
+  const addLocationStatus = document.getElementById("addLocationStatus");
+
+  if (pickOnMapBtn) {
+    pickOnMapBtn.addEventListener("click", () => {
+      addLocationStatus.textContent = "Switching to the Map tab — click anywhere on it to set this location's coordinates.";
+      document.querySelector('.tab-btn[data-tab="map"]').click();
+      window.__onMapPick = (lat, lng) => {
+        document.getElementById("newLocLat").value = lat.toFixed(5);
+        document.getElementById("newLocLon").value = lng.toFixed(5);
+        window.__onMapPick = null;
+        document.querySelector('.tab-btn[data-tab="report"]').click();
+        document.querySelector('.subtab-btn[data-subtab="zones"]').click();
+        addLocationStatus.textContent = `Coordinates set to ${lat.toFixed(5)}, ${lng.toFixed(5)} — fill in a name and type, then Add to table.`;
+      };
+    });
+  }
+
+  if (addLocationBtn) {
+    addLocationBtn.addEventListener("click", () => {
+      const name = document.getElementById("newLocName").value;
+      const kind = document.getElementById("newLocKind").value;
+      const lat = parseFloat(document.getElementById("newLocLat").value);
+      const lon = parseFloat(document.getElementById("newLocLon").value);
+      const error = addCustomLandmark(name, kind, lat, lon);
+      if (error) {
+        addLocationStatus.textContent = error;
+        addLocationStatus.style.color = "#c0392b";
+      } else {
+        addLocationStatus.textContent = `Added "${name.trim()}" — it now appears in the ranking, zone timelines, and both maps.`;
+        addLocationStatus.style.color = "";
+        document.getElementById("newLocName").value = "";
+        document.getElementById("newLocLat").value = "";
+        document.getElementById("newLocLon").value = "";
+      }
+    });
+  }
+
+  // ---------- Turn Shift Recommendations tab ----------
+  function renderCandidateList() {
+    const list = document.getElementById("candidateList");
+    if (!list) return;
+    list.innerHTML = "";
+    const candidates = turnCandidates();
+    if (candidates.length === 0) {
+      list.innerHTML = "<p class='report-note' style='margin:0;'>No locations are currently at high/extreme risk in the loaded window.</p>";
+      return;
+    }
+    candidates.forEach((landmark) => {
+      const peak = peakInfo(landmark.name);
+      const row = document.createElement("label");
+      row.className = "candidate-row";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = appliedChanges.has(landmark.name);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) appliedChanges.add(landmark.name); else appliedChanges.delete(landmark.name);
+        if (tsMapsReady) { renderTurnShiftMaps(); renderTurnShiftChart(); }
+      });
+      const name = document.createElement("span");
+      name.className = "candidate-name";
+      name.textContent = landmark.name.replace(/ \(.*\)$/, "");
+      const meta = document.createElement("span");
+      meta.className = "candidate-meta";
+      meta.textContent = `Peak: ${LEVEL_LABEL[peak.level]} · suggested offset ${OFFSET_BY_LEVEL[peak.level]} · assumed −${Math.round(REDUCTION_BY_LEVEL[peak.level] * 100)}% at peak`;
+      const badge = document.createElement("span");
+      badge.className = "candidate-badge";
+      badge.style.background = LEVEL_COLOR[peak.level];
+      badge.textContent = LEVEL_LABEL[peak.level];
+      row.appendChild(checkbox);
+      row.appendChild(name);
+      row.appendChild(meta);
+      row.appendChild(badge);
+      list.appendChild(row);
+    });
+  }
+
+  function buildTurnShiftMarkers() {
+    tsBeforeMarkers.forEach(({ marker, circle }) => { marker.setMap(null); circle.setMap(null); });
+    tsAfterMarkers.forEach(({ marker, circle }) => { marker.setMap(null); circle.setMap(null); });
+    tsBeforeMarkers.length = 0;
+    tsAfterMarkers.length = 0;
+    LANDMARKS.forEach((landmark) => {
+      const position = { lat: landmark.lat, lng: landmark.lon };
+      const beforeCircle = new google.maps.Circle({ map: tsBeforeMap, center: position, radius: landmark.radius_m, strokeWeight: 1 });
+      const beforeMarker = new google.maps.Marker({ map: tsBeforeMap, position, title: landmark.name, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9 } });
+      tsBeforeMarkers.push({ marker: beforeMarker, circle: beforeCircle, landmark });
+
+      const afterCircle = new google.maps.Circle({ map: tsAfterMap, center: position, radius: landmark.radius_m, strokeWeight: 1 });
+      const afterMarker = new google.maps.Marker({ map: tsAfterMap, position, title: landmark.name, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9 } });
+      tsAfterMarkers.push({ marker: afterMarker, circle: afterCircle, landmark });
+    });
+  }
+
+  function ensureTurnShiftMaps() {
+    if (tsMapsReady || typeof google === "undefined" || !google.maps) return;
+    const bounds = new google.maps.LatLngBounds();
+    const candidates = turnCandidates();
+    (candidates.length ? candidates : LANDMARKS).forEach((l) => bounds.extend({ lat: l.lat, lng: l.lon }));
+
+    tsBeforeMap = new google.maps.Map(document.getElementById("tsBeforeMap"), {
+      center: { lat: 12.965, lng: 77.62 }, zoom: 11, mapId: undefined,
+      streetViewControl: false, fullscreenControl: false, mapTypeControl: false
+    });
+    tsBeforeMap.fitBounds(bounds, 30);
+    const tsTrafficLayer = new google.maps.TrafficLayer();
+    tsTrafficLayer.setMap(tsBeforeMap);
+
+    tsAfterMap = new google.maps.Map(document.getElementById("tsAfterMap"), {
+      center: { lat: 12.965, lng: 77.62 }, zoom: 11, mapId: undefined,
+      streetViewControl: false, fullscreenControl: false, mapTypeControl: false
+    });
+    tsAfterMap.fitBounds(bounds, 30);
+
+    buildTurnShiftMarkers();
+
+    tsMapsReady = true;
+    renderTurnShiftMaps();
+    renderTurnShiftChart();
+  }
+
+  function styleMarkerForLevel(marker, circle, level) {
+    const color = LEVEL_COLOR[level];
+    marker.setIcon({
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: MARKER_SCALE[level],
+      fillColor: color,
+      fillOpacity: LEVEL_FILL_OPACITY[level],
+      strokeColor: level === "extreme" ? "#ffffff" : "#2c0a5e",
+      strokeWeight: LEVEL_BORDER_WEIGHT[level]
+    });
+    circle.setOptions({
+      fillColor: color,
+      fillOpacity: level === "none" ? 0.05 : LEVEL_FILL_OPACITY[level] * 0.3,
+      strokeColor: color, strokeOpacity: level === "none" ? 0.2 : 0.6,
+      strokeWeight: LEVEL_BORDER_WEIGHT[level]
+    });
+  }
+
+  // The reduction tier is keyed off the BEFORE severity itself — a location
+  // only qualifies for a (bigger) assumed benefit once it's actually at
+  // High/Extreme; ticking a location that's calm today applies no
+  // reduction, since there's nothing predicted to relieve.
+  function reductionForRank(rank) {
+    return REDUCTION_BY_LEVEL[rankToLevel(rank)] || 0;
+  }
+
+  function renderTurnShiftMaps() {
+    if (!tsMapsReady) return;
+    tsBeforeMarkers.forEach(({ marker, circle, landmark }) => {
+      const beforeRank = LEVEL_RANK[cellFor(landmark.name, dayIndex).level];
+      styleMarkerForLevel(marker, circle, rankToLevel(beforeRank));
+    });
+    tsAfterMarkers.forEach(({ marker, circle, landmark }) => {
+      const beforeRank = LEVEL_RANK[cellFor(landmark.name, dayIndex).level];
+      const afterRank = appliedChanges.has(landmark.name) ? beforeRank * (1 - reductionForRank(beforeRank)) : beforeRank;
+      styleMarkerForLevel(marker, circle, rankToLevel(afterRank));
+    });
+  }
+
+  function renderTurnShiftChart() {
+    const rowsEl = document.getElementById("compareRows");
+    const summaryEl = document.getElementById("compareSummary");
+    if (!rowsEl || !summaryEl) return;
+    rowsEl.innerHTML = "";
+
+    const selected = Array.from(appliedChanges).map((name) => LANDMARKS.find((l) => l.name === name)).filter(Boolean);
+
+    if (selected.length === 0) {
+      summaryEl.innerHTML = "";
+      rowsEl.innerHTML = "<p class='report-note' style='margin:0;'>Tick a candidate location above to see its before/after comparison here.</p>";
+      return;
+    }
+
+    let totalBefore = 0, totalAfter = 0;
+    selected.forEach((landmark) => {
+      const beforeRank = LEVEL_RANK[cellFor(landmark.name, dayIndex).level];
+      const factor = reductionForRank(beforeRank);
+      const afterRank = beforeRank * (1 - factor);
+      totalBefore += beforeRank;
+      totalAfter += afterRank;
+
+      const pct = Math.round(factor * 100);
+      let pctLabel;
+      if (beforeRank === 0) pctLabel = "no change (not flagged today)";
+      else if (factor === 0) pctLabel = "no reduction assumed (only High/Extreme qualify — today is " + LEVEL_LABEL[rankToLevel(beforeRank)] + ")";
+      else pctLabel = "-" + pct + "%";
+      const row = document.createElement("div");
+      row.className = "compare-row";
+      row.innerHTML = `
+        <div class="compare-row-top">
+          <span>${landmark.name.replace(/ \(.*\)$/, "")} — ${LEVEL_LABEL[rankToLevel(beforeRank)]} → ${LEVEL_LABEL[rankToLevel(afterRank)]} <span style="color:var(--ink-muted);font-weight:400;">(offset ${OFFSET_BY_LEVEL[rankToLevel(beforeRank)]})</span></span>
+          <span class="pct" style="${factor === 0 ? 'color:var(--ink-muted);font-weight:400;' : ''}">${pctLabel}</span>
+        </div>
+        <div class="compare-bar-track"><div class="compare-bar-fill before" style="width:${(beforeRank / 3) * 100}%"></div></div>
+        <div class="compare-bar-track"><div class="compare-bar-fill after" style="width:${(afterRank / 3) * 100}%"></div></div>
+      `;
+      rowsEl.appendChild(row);
+    });
+
+    const aggregatePct = totalBefore > 0 ? Math.round(((totalBefore - totalAfter) / totalBefore) * 100) : 0;
+    summaryEl.innerHTML = `
+      <div><div class="label">Areas selected</div><div class="value">${selected.length}</div></div>
+      <div><div class="label">Reduction tiers</div><div class="value" style="font-size:13px;">High −20% · Extreme −30%</div></div>
+      <div><div class="label">Aggregate predicted change</div><div class="value">-${aggregatePct}%</div></div>
+    `;
+  }
 
   if (!GOOGLE_MAPS_API_KEY) {
     document.getElementById("setup-banner").style.display = "block";
