@@ -1,0 +1,6 @@
+networkx>=3.0
+pyyaml>=6.0
+
+# Optional, only needed for graph_io.fetch_osm_graph() / a live OSM pull:
+# osmnx>=1.9
+# folium>=0.15  # for an HTML map of ranked roads, not yet wired into report.py

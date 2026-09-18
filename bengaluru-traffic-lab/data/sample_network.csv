@@ -1,0 +1,12 @@
+u,v,name,length_m,oneway
+A,B,North Main Road,300,false
+B,C,North Cross Road,300,false
+C,D,West Loop Road,300,false
+D,A,East Loop Road,300,false
+A,C,Diagonal Shortcut,450,false
+D,E,Connector Bridge,600,false
+E,F,South Main Road,300,false
+F,G,South Cross Road,300,false
+G,H,Harbor Loop Road,300,false
+H,E,Dock Loop Road,300,false
+E,G,South Diagonal,450,false

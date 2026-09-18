@@ -1,0 +1,40 @@
+# SAMPLE DATA — schema demonstration only. Dates below are illustrative
+# placeholders, NOT verified against an official panchang/Islamic
+# calendar/civic calendar. Most Hindu and Islamic festival dates are
+# lunar/lunisolar and shift every year — before using this file for real
+# scheduling, replace every date with one confirmed from an authoritative
+# source (state government holiday calendar, BBMP/Traffic Police
+# advisories, local temple/mosque committee) for the actual year in
+# question.
+#
+# severity: elevated | high | extreme
+# affected_kinds / affected_names: match against Landmark.kind / .name in
+# landmarks.sample.csv. Leave both empty for a citywide event.
+
+- name: "Ganesh Chaturthi immersion (visarjan) — EXAMPLE DATE, VERIFY"
+  start_date: 2026-09-25
+  end_date: 2026-09-27
+  severity: extreme
+  affected_kinds: []
+  affected_names: []
+  note: "Procession routes to lakes/tanks close roads outright; check BBMP-published immersion route list each year."
+
+- name: "Karaga festival — EXAMPLE DATE, VERIFY"
+  start_date: 2026-04-01
+  end_date: 2026-04-02
+  severity: high
+  affected_kinds: [temple_generic]
+  note: "Night-long procession through the Pete area; historically affects Avenue Road / KR Market vicinity."
+
+- name: "Ramzan (Eid al-Fitr) — EXAMPLE DATE, VERIFY"
+  start_date: 2026-03-20
+  end_date: 2026-03-20
+  severity: high
+  affected_kinds: [masjid]
+  note: "Large congregational prayer turnout; verify moon-sighting-dependent date close to the event."
+
+- name: "Christmas Eve / Midnight Mass — EXAMPLE DATE, VERIFY"
+  start_date: 2026-12-24
+  end_date: 2026-12-25
+  severity: high
+  affected_kinds: [church]

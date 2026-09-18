@@ -1,0 +1,10 @@
+# SAMPLE DATA — illustrative only. Coordinates are approximate and the
+# nearby_road_names lists are placeholders; verify both against a map
+# before using this for anything operational. Multiple pipe-separated
+# roads are supported in nearby_road_names.
+name,kind,lat,lon,radius_m,nearby_road_names
+Bull Temple (Basavanagudi),temple_generic,12.9432,77.5721,400,Bugle Rock Road|Bull Temple Road
+Jumma Masjid (Bangalore City),masjid,12.9634,77.5793,400,Old Poor House Road|Avenue Road
+Someshwara Temple (Ulsoor),shani_temple,12.9815,77.6202,300,Someshwara Temple Street
+St. Mary's Basilica,church,12.9634,77.6089,400,Court Street
+Sri Prasanna Anjaneya Temple (illustrative),hanuman_temple,12.9550,77.5850,300,Anjaneya Temple Road
